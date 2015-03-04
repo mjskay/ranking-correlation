@@ -1,0 +1,26 @@
+# Re-analysis of _Ranking Visualizations of Correlation Using Weber's Law_
+
+_Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))
+
+## Libraries needed for these analyses
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)           #default code chunk options
+panderOptions("table.split.table", Inf)     #don't split wide tables in output
+panderOptions("table.style", "rmarkdown")   #table style that's supported by github
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(visreg)
+library(MASS)
+library(gamlss)
+```
+
+```{r clean, include=FALSE}
+source("src/clean-data.R")
+```
+
+
