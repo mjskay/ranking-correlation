@@ -1,6 +1,6 @@
 # Re-analysis of _Ranking Visualizations of Correlation Using Weber's Law_
 
-_Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))
+_Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_
 
 ## Libraries needed for these analyses
 
@@ -17,10 +17,109 @@ library(lme4)
 library(visreg)
 library(MASS)
 library(gamlss)
+library(car)        #bcPower
 ```
 
-```{r clean, include=FALSE}
-source("src/clean-data.R")
+# Load and clean data
+```{r clean}
+#read data
+df = read.csv("data/master.csv")
+
+#clean up columns from original data
+df = df %>%
+    rename(r = rbase)
+
+#calculate values used to derive filtering conditions used in original paper
+df = df %>%
+    group_by(visandsign) %>%
+    summarize(p_chance = sum(jnd > .45)/length(jnd)) %>%    #proportion of jnd worse than chance
+    join(df)
+
+df = df %>%
+    group_by(visandsign, r, approach) %>%
+    summarize(
+        jnd_mad = mad(jnd),         #within-group median absolute deviation 
+        jnd_median = median(jnd)
+    ) %>%
+    join(df)
+
+#filters used by original paper: when either is true, that data was excluded
+df$p_chance_cutoff = df$p_chance > .2   #visandsigns with > 20% observations of jnd worse than chance
+df$mad_cutoff = abs(df$jnd - df$jnd_median) > 3 * df$jnd_mad    #observations > 3 mads from the median
 ```
 
+# Original linear model
+This is a linear model with the original filter on MAD (> 3 MADs from the
+median) and visandsigns with > 20% JNDs worse than chance excluded.
+
+```{r linear_model}
+m.linear = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff)
+    )
+plot(m.linear)
+```
+
+# Log-linear model
+If we estimate a Box-Cox power transform from the original model, the
+confidence interval for $\lambda$ includes 0 (log transform) and excludes 1
+(identity, i.e. the linear model):
+
+```{r boxcox}
+bc = powerTransform(jnd ~ r * visandsign * approach, data=filter(df, !mad_cutoff & !p_chance_cutoff))
+summary(bc)
+```
+
+This suggests a log-linear model (i.e., using log-transformed JND) may perform
+better than the linear model. Such a model stabilizes the variance in residuals.
+It also addresses the problem of the original model making nonsensical
+predictions (like JNDs less than 0).
+
+```{r log_linear_model}
+m.loglinear = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff),
+    family=LOGNO
+    )
+plot(m.loglinear)
+```
+
+Note that the residuals here are more well-behaved in terms of normality and
+scale-location invariance. We also have lower AIC in the log-linear model (`r AIC(m.loglinear)`)
+compared to the linear model (`r AIC(m.linear)`).
+
+# Log-linear model with censoring
+This model addresses outliers through censoring. We remove both filters used in
+the original paper, and instead uses censoring for values that are close to or
+worse than chance, or close to or past the ceiling of JND (from above) and the
+floor of JND (from below).
+
+First, we derive the thresholds used for censoring.
+
+```{r censoring_parameters}
+#censorship based on being above / below ceiling/floor , and chance
+df = mutate(df,
+    censoring_threshold = ifelse(approach == "below", 
+                    pmin(r - .05, .4), 
+                    pmin(.95 - r, .4)),
+    not_censored = jnd < censoring_threshold,
+    censored_jnd = pmin(jnd, censoring_threshold)
+)
+```
+
+Then, we build the censored model.
+
+```{r censored_model}
+m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=df,
+    family=cens(LOGNO)
+    )
+plot(m.censored)
+```
+
+# Bayesian log-linear model with censoring
+
+# Precision of estimation for random correlations rendered using each chart type
+ 
 
