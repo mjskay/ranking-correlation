@@ -4,3 +4,8 @@
 .pdf
 .project
 *~
+
+#ignore RMarkdown output files on dev branch
+README.md
+README.html
+cache/
