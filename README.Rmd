@@ -21,6 +21,7 @@ library(dplyr)
 library(survival)       #Surv
 library(gamlss)
 library(gamlss.cens)    #cens
+library(pander)         #pander
 ```
 
 ```{r setup2, include=FALSE}
@@ -124,6 +125,14 @@ df = df %>%
 #filters used by original paper: when either is true, that data was excluded
 df$p_chance_cutoff = df$p_chance > .2   #visandsigns with > 20% observations of jnd worse than chance
 df$mad_cutoff = abs(df$jnd - df$jnd_median) > 3 * df$jnd_mad    #observations > 3 mads from the median
+
+#approach should be coded as sum-to-zero so that other coefficients can be 
+#interpreted as relative to the mean of both approaches. We relevel first 
+#so that "below" is assigned 1 and "above" -1 (this is just to eliminate
+#a double-negative so that the sign of the coefficient of approach is positive,
+#makes interpretation slightly simpler)
+df$approach = relevel(df$approach, "below")
+contrasts(df$approach) = contr.sum
 ```
 
 # Original linear model
@@ -176,7 +185,16 @@ saveGraph("output/residuals-loglinear", "pdf")
 
 Note that the residuals here are more well-behaved in terms of normality and
 scale-location invariance. We also have lower AIC in the log-linear model (`r AIC(m.loglinear)`)
-compared to the linear model (`r AIC(m.linear)`).
+compared to the linear model: (`r AIC(m.linear)`).
+
+```{r linear_vs_loglinear_AIC, eval=FALSE}
+AIC(m.linear, m.loglinear)
+```
+
+```{r linear_vs_loglinear_AIC_2, echo=FALSE, results='asis'}
+pander(AIC(m.linear, m.loglinear))
+```
+
 
 # Log-linear model with censoring
 This model addresses outliers through censoring. We remove both filters used in
