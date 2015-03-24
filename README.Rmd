@@ -196,6 +196,7 @@ pander(AIC(m.linear, m.loglinear))
 ```
 
 
+
 # Log-linear model with censoring
 This model addresses outliers through censoring. We remove both filters used in
 the original paper, and instead uses censoring for values that are close to or
@@ -210,7 +211,7 @@ df = mutate(df,
     censoring_threshold = ifelse(approach == "below", 
                     pmin(r - .05, .4), 
                     pmin(.95 - r, .4)),
-    not_censored = jnd < censoring_threshold,
+    not_censored = jnd <= censoring_threshold,
     censored_jnd = pmin(jnd, censoring_threshold)
 )
 ```
@@ -224,6 +225,38 @@ m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach
     family=cens(LOGNO)
     )
 plot(m.censored)
+
+m.censored2 = gamlss(Surv(log_censored_jnd, not_censored) ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=df,
+    family=cens(NO)
+    )
+
+
+m.censoredt2 = gamlss(Surv(log_censored_jnd, not_censored) ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    nu.formula = ~ visandsign,
+    data=df,
+    family=cens(TF)
+    )
+
+m.censored.bct = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach,
+    data=df,
+    family=cens(BCT)
+    )
+
+m.bccg = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff),
+    family=BCCG
+    )
+
+m.bct = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff),
+    family=BCT
+    )
+
 ```
 
 ```{r censored_model_plot, include=FALSE, cache=FALSE}

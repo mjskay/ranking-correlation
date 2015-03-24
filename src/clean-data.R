@@ -46,7 +46,7 @@ df = mutate(df,
     censoring_threshold = ifelse(approach == "below", 
                     pmin(r - .05, .4), 
                     pmin(.95 - r, .4)),
-    not_censored = jnd < censoring_threshold,
+    not_censored = jnd <= censoring_threshold,
     censored_jnd = pmin(jnd, censoring_threshold)
 )
 
