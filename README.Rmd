@@ -10,7 +10,7 @@ panderOptions("table.split.table", Inf)     #don't split wide tables in output
 panderOptions("table.style", "rmarkdown")   #table style that's supported by github
 ```
 
-```{r libraries, message=FALSE, warning=FALSE}
+```{r libraries, message=FALSE, warning=FALSE, cache=FALSE}
 library(car)            #bcPower
 library(ggplot2)
 library(scales)
@@ -28,16 +28,19 @@ library(pander)         #pander
 source("src/openGraphSaveGraph.R")
 
 #set up ggplot theme
-theme_set(theme_bw())
-theme_update(
+theme_set(theme_bw() + theme(
     panel.grid.major=element_blank(), 
     panel.grid.minor=element_blank(),
     axis.line=element_line(color="black"),
-    panel.border=element_blank()
-)
+    panel.border=element_blank(),
+    text=element_text(size=16),
+    axis.text=element_text(size=rel(15/16)),
+    axis.ticks.length=unit(8, "points"),
+    line=element_line(size=1)
+))
 
 #model fit plotting function
-plot.residuals = function(m, log_x=FALSE, log_base=2, data_color = "#bfbfbf", sd_color="#d62d0e", dnorm_color="#066fff") {
+plot.residuals = function(m, log_x=FALSE, log_base=2, data_color = "#999999", sd_color="#d62d0e", dnorm_color="#066fff") {
 
     data = data.frame(
         eval(m$call$data),
@@ -61,7 +64,7 @@ plot.residuals = function(m, log_x=FALSE, log_base=2, data_color = "#bfbfbf", sd
     fitted_plot = ggplot(data, 
             aes(x=`Fitted JND`, y=`Normalized Quantile Residuals`)
         ) +
-        geom_point(color=data_color, size=2, alpha=0.4) +
+        geom_point(color=data_color, size=2, alpha=0.25) +
         geom_rug(sides="r", color=data_color) +
         geom_hline(y=0, linetype="dashed", alpha=0.5) + 
         geom_linerange(data=scale_location, aes(ymin=standard_deviation, ymax=-standard_deviation, y=NULL), color=sd_color, size=1.0) +
@@ -97,6 +100,56 @@ plot.residuals = function(m, log_x=FALSE, log_base=2, data_color = "#bfbfbf", sd
         grid.draw()
 
 }
+
+#model fitting plotting function for a given viz, showing residuals relative to r
+plot.r.residuals = function(df, m, plotted_visandsign, log_y=FALSE, log_base=2, data_color = "#999999", sd_color = "#d62d0e") {
+    #calculate residual variance
+    residual_df = df %>%
+        filter(visandsign == plotted_visandsign & !mad_cutoff) %>%
+        cbind(prediction=predict(m, newdata=.)) %>%
+        mutate(
+            jnd = if (log_y) log(jnd, base=log_base) else jnd,
+            prediction = if (log_y) prediction / log(log_base) else prediction
+            ) %>%
+        group_by(r) %>%
+        summarize(
+            sd = sd(jnd - prediction),
+            jnd = mean(prediction)
+        )
+    
+    #calculate fit line
+    coefs = as.list(coef(m))
+    fit_slope = coefs$r + coefs[[paste0("r:visandsign", plotted_visandsign)]]
+    fit_intercept = coefs$`(Intercept)` + coefs[[paste0("visandsign", plotted_visandsign)]]
+    
+    #chance threshold
+    chance = if (log_y) log(.45, base=log_base) else .45
+    
+    if (log_y) {
+        df$jnd = log(df$jnd, base=log_base)
+        fit_slope = fit_slope / log(log_base)
+        fit_intercept = fit_intercept / log(log_base)
+    }
+    
+    p = ggplot(
+            filter(df, visandsign == plotted_visandsign & !mad_cutoff),
+            aes(x=r, 
+                y=jnd 
+                )) + 
+        geom_point(size=3, alpha=.25, color=data_color) + 
+#        geom_hline(yintercept=chance, lty="dashed") +
+        geom_abline(slope=fit_slope, intercept=fit_intercept, size=1.0) +
+        geom_linerange(data=residual_df, aes(ymin=jnd - sd, ymax=jnd + sd, y=NULL), color=sd_color, size=1.0)
+    
+    if (log_y) {
+        p = p + 
+#            scale_y_continuous(labels=trans_format(function(x) log_base^x, math_format(.x))) +
+            annotation_logticks(sides="l")
+    }
+    
+    p
+}
+
 ```
 
 # Load and clean data
@@ -136,6 +189,25 @@ contrasts(df$approach) = contr.sum
 ```
 
 # Original linear model
+Let's see an example of approach:
+
+```{r approach_example}
+openGraph(6,5)
+ggplot(
+        filter(df, !mad_cutoff),
+        aes(x=r, 
+            y=jnd,
+            color=approach
+            )) + 
+    geom_point(size=3, alpha=.15) +  
+    stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed") +
+    stat_smooth(method=lm, se=FALSE, mapping=aes(group=NA), size=1, color="black", linetype="dashed") +
+    scale_color_discrete(h=c(60, 240), c=70, l=63) +
+    ylim(0,0.3)
+saveGraph("output/approach-example", "pdf")
+
+```
+
 This is a linear model with the original filter on MAD (> 3 MADs from the
 median) and visandsigns with > 20% JNDs worse than chance excluded.
 
@@ -151,6 +223,10 @@ plot(m.linear)
 openGraph(7,5)
 plot.residuals(m.linear)
 saveGraph("output/residuals-linear", "pdf")
+
+openGraph(4,5)
+plot.r.residuals(df, m.linear, "scatterplotnegative")
+saveGraph("output/residuals-linear-by_r-scatterplotnegative", "pdf")
 ```
 
 # Log-linear model
@@ -181,6 +257,10 @@ plot(m.loglinear)
 openGraph(7,5)
 plot.residuals(m.loglinear, log_x=TRUE)
 saveGraph("output/residuals-loglinear", "pdf")
+
+openGraph(4,5)
+plot.r.residuals(df, m.loglinear, "scatterplotnegative", log_y=TRUE)
+saveGraph("output/residuals-loglinear-by_r-scatterplotnegative", "pdf")
 ```
 
 Note that the residuals here are more well-behaved in terms of normality and
@@ -225,38 +305,6 @@ m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach
     family=cens(LOGNO)
     )
 plot(m.censored)
-
-m.censored2 = gamlss(Surv(log_censored_jnd, not_censored) ~ r * visandsign * approach,
-    sigma.formula = ~ visandsign,
-    data=df,
-    family=cens(NO)
-    )
-
-
-m.censoredt2 = gamlss(Surv(log_censored_jnd, not_censored) ~ r * visandsign * approach,
-    sigma.formula = ~ visandsign,
-    nu.formula = ~ visandsign,
-    data=df,
-    family=cens(TF)
-    )
-
-m.censored.bct = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach,
-    data=df,
-    family=cens(BCT)
-    )
-
-m.bccg = gamlss(jnd ~ r * visandsign * approach,
-    sigma.formula = ~ visandsign,
-    data=filter(df, !mad_cutoff & !p_chance_cutoff),
-    family=BCCG
-    )
-
-m.bct = gamlss(jnd ~ r * visandsign * approach,
-    sigma.formula = ~ visandsign,
-    data=filter(df, !mad_cutoff & !p_chance_cutoff),
-    family=BCT
-    )
-
 ```
 
 ```{r censored_model_plot, include=FALSE, cache=FALSE}

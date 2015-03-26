@@ -9,7 +9,7 @@ library(grid)
 library(plyr)
 library(dplyr)
 
-memory.limit(6096)
+memory.limit(8000)
 
 source("src/openGraphSaveGraph.R")
 
@@ -272,15 +272,28 @@ for (i in 1:length(visandsigns)) {
     typical_mu[[paste0("typical_mu", i)]] = NULL
 }
 
+#tau
+taudf=extract_sample(mcmcChain, ~ tau[visandsign_number])
+taudf$visandsign = factor(visandsigns[tau$visandsign_number])
 
+
+#typical mu
 tmdf=extract_sample(mcmcChain, ~ typical_mu[visandsign_number])
 tmdf$visandsign = factor(visandsigns[tmdf$visandsign_number])
-
-ggplot(extract_sample(mcmcChain, ~ typical_mu[i]),
+tmdf$visandsign_bymean = with(tmdf, reorder(visandsign, -typical_mu, mean))
+tmdf_intervals = ddply(tmdf, ~ visandsign_bymean, summarize, 
+    tm_mean=mean(typical_mu), tm_lower=quantile(typical_mu,.025), tm_upper=quantile(typical_mu,.975))
+ggplot(tmdf,
+        aes(x=visandsign_bymean, y=typical_mu)) + 
+        geom_violin(linetype=0, fill="skyblue") + 
+        geom_hline(yintercept=log(.45), lty="dashed") +
+        geom_segment(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, xend=visandsign_bymean, y=tm_lower, yend=tm_upper), size=1.25) +
+        geom_point(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, y=tm_mean), size=3, shape=3) +
+#        ylim(-3.5, 0) +
+        coord_flip() +
+        theme_bw()
+grid.edit("geom_point.points", grep = TRUE, gp = gpar(lwd = 3))
     
-    
-    )
-
 
 #log-space model posteriors
 ggplot(
