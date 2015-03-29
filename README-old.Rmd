@@ -1,0 +1,316 @@
+# Re-analysis of _Ranking Visualizations of Correlation Using Weber's Law_
+
+_Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_
+
+## Libraries needed for these analyses
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)           #default code chunk options
+panderOptions("table.split.table", Inf)     #don't split wide tables in output
+panderOptions("table.style", "rmarkdown")   #table style that's supported by github
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(car)            #bcPower
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(survival)       #Surv
+library(gamlss)
+library(gamlss.cens)    #cens
+```
+
+# Load and clean data
+```{r clean}
+#read data
+df = read.csv("data/master.csv")
+
+#clean up columns from original data
+df = df %>%
+    rename(r = rbase)
+
+#calculate values used to derive filtering conditions used in original paper
+df = df %>%
+    group_by(visandsign) %>%
+    summarize(p_chance = sum(jnd > .45)/length(jnd)) %>%    #proportion of jnd worse than chance
+    join(df)
+
+df = df %>%
+    group_by(visandsign, r, approach) %>%
+    summarize(
+        jnd_mad = mad(jnd),         #within-group median absolute deviation 
+        jnd_median = median(jnd)
+    ) %>%
+    join(df)
+
+#filters used by original paper: when either is true, that data was excluded
+df$p_chance_cutoff = df$p_chance > .2   #visandsigns with > 20% observations of jnd worse than chance
+df$mad_cutoff = abs(df$jnd - df$jnd_median) > 3 * df$jnd_mad    #observations > 3 mads from the median
+```
+
+# Original linear model
+This is a linear model with the original filter on MAD (> 3 MADs from the
+median) and visandsigns with > 20% JNDs worse than chance excluded.
+
+```{r linear_model}
+m.linear = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff)
+    )
+plot(m.linear)
+```
+
+# Log-linear model
+If we estimate a Box-Cox power transform from the original model, the
+confidence interval for $\lambda$ includes 0 (log transform) and excludes 1
+(identity, i.e. the linear model):
+
+```{r boxcox}
+bc = powerTransform(jnd ~ r * visandsign * approach, data=filter(df, !mad_cutoff & !p_chance_cutoff))
+summary(bc)
+```
+
+This suggests a log-linear model (i.e., using log-transformed JND) may perform
+better than the linear model. Such a model stabilizes the variance in residuals.
+It also addresses the problem of the original model making nonsensical
+predictions (like JNDs less than 0).
+
+```{r log_linear_model}
+m.loglinear = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff),
+    family=LOGNO
+    )
+plot(m.loglinear)
+```
+
+Note that the residuals here are more well-behaved in terms of normality and
+scale-location invariance. We also have lower AIC in the log-linear model (`r AIC(m.loglinear)`)
+compared to the linear model (`r AIC(m.linear)`).
+
+# Log-linear model with censoring
+This model addresses outliers through censoring. We remove both filters used in
+the original paper, and instead uses censoring for values that are close to or
+worse than chance, or close to or past the ceiling of JND (from above) and the
+floor of JND (from below).
+
+First, we derive the thresholds used for censoring.
+
+```{r censoring_parameters}
+#censorship based on being above / below ceiling/floor , and chance
+df = mutate(df,
+    censoring_threshold = ifelse(approach == "below", 
+                    pmin(r - .05, .4), 
+                    pmin(.95 - r, .4)),
+    not_censored = jnd < censoring_threshold,
+    censored_jnd = pmin(jnd, censoring_threshold)
+)
+```
+
+Then, we build the censored model.
+
+```{r censored_model}
+m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach,
+    sigma.formula = ~ visandsign,
+    data=df,
+    family=cens(LOGNO)
+    )
+plot(m.censored)
+
+plot.residuals.old = function(m) {
+    data = data.frame(
+        eval(m$call$data),
+        `Fitted JND`=fitted(m), 
+        `Normalized Quantile Residuals`=resid(m), 
+        check.names=FALSE)
+        
+    fitted_plot = ggplot(data, 
+            aes(x=`Fitted JND`, y=`Normalized Quantile Residuals`)
+        ) +
+        geom_point(alpha=0.1) +
+        geom_hline(y=0, linetype="dashed") + 
+        geom_rug(sides="r", alpha=0.1) +
+        ylim(-5.5,5.5) +
+        xlim(min(data$`Fitted JND`), max(data$`Fitted JND`))
+    fitted_plot = ggplotGrob(fitted_plot)
+        
+    scale_location = data %>%
+        group_by(cut(`Fitted JND`, 10)) %>%
+        summarize(
+            `Fitted JND` = mean(`Fitted JND`),
+            Variance = var(`Normalized Quantile Residuals`)
+            )
+    scale_location_plot = ggplot(scale_location, aes(
+            x=`Fitted JND`, 
+            y=Variance
+        )) +
+            geom_line() +
+            ylim(0,2) +
+            xlim(min(data$`Fitted JND`), max(data$`Fitted JND`))
+    scale_location_plot = ggplotGrob(scale_location_plot)
+
+#    scale_location = 
+#        ggplot(data, aes(x=`Fitted JND`, y=sqrt(abs(`Normalized Quantile Residuals`)))) +
+#            #geom_point(alpha=.1) +
+#            stat_smooth(se=FALSE) + 
+#            xlim(min(data$`Fitted JND`), max(data$`Fitted JND`)) +
+#            ylim(0,4)
+#    scale_location = ggplotGrob(scale_location)
+
+    residual_hist = ggplot(data, aes(x=`Normalized Quantile Residuals`)) +
+        stat_density(fill="skyblue") +
+        geom_vline(x=0, linetype="dashed") + 
+        xlim(-5.5,5.5) +
+        coord_flip()
+    residual_hist = ggplotGrob(residual_hist)
+    
+    grid.newpage()
+    gtable(heights=unit(c(10,1),c("lines","null")), widths=unit(c(3,1,8),c("lines","null","lines"))) %>%
+        gtable_add_grob(scale_location_plot[1:4,1:3], 1, 1) %>%
+        gtable_add_grob(scale_location_plot[1:4,4:5], 1, 2) %>%
+        gtable_add_grob(fitted_plot[,1:3], 2, 1) %>%
+        gtable_add_grob(fitted_plot[,4:5], 2, 2) %>%
+        gtable_add_grob(residual_hist[,3:5], 2, 3) %>%
+        grid.draw()
+
+}
+
+#set up ggplot theme
+theme_set(theme_bw())
+theme_update(
+    panel.grid.major=element_blank(), 
+    panel.grid.minor=element_blank(),
+    axis.line=element_line(color="black"),
+    panel.border=element_blank()
+)
+
+plot.residuals = function(m, data_color = "#a1c2d8", sd_color="#b22d0e", dnorm_color="#066fff") {
+
+    data = data.frame(
+        eval(m$call$data),
+        `Fitted JND`=fitted(m), 
+        `Normalized Quantile Residuals`=resid(m), 
+        check.names=FALSE)
+        
+    scale_location = data %>%
+        group_by(interval=cut(`Fitted JND`, 15)) %>%
+        summarize(
+            `Fitted JND` = mean(as.numeric(strsplit(as.character(interval), '(\\(|\\,|\\])')[[1]][2:3])),
+            standard_deviation = sd(`Normalized Quantile Residuals`)
+            )
+
+    fitted_plot = ggplot(data, 
+            aes(x=`Fitted JND`, y=`Normalized Quantile Residuals`)
+        ) +
+        geom_point(color=data_color, size=2, alpha=0.25) +
+        geom_rug(sides="r", color=data_color) +
+        geom_hline(y=0, linetype="dashed", alpha=0.5) + 
+        geom_linerange(data=scale_location, aes(ymin=standard_deviation, ymax=-standard_deviation, y=NULL), color=sd_color, size=1.0) +
+        ylim(-5.5,5.5) +
+        xlim(min(data$`Fitted JND`), max(data$`Fitted JND`))
+    fitted_plot = ggplotGrob(fitted_plot)
+        
+
+    residual_hist = ggplot(data, aes(x=`Normalized Quantile Residuals`)) +
+        stat_density(fill=data_color) +
+        geom_vline(x=0, linetype="dashed", alpha=0.5) + 
+        xlim(-5.5,5.5) +
+        ylim(0,0.6) +
+        stat_function(fun=dnorm, linetype="dashed", color=dnorm_color) +
+        coord_flip()
+    residual_hist = ggplotGrob(residual_hist)
+    
+    grid.newpage()
+    gtable(heights=unit(1,"null"), widths=unit(c(3,5,1),c("lines","null","null"))) %>%
+        gtable_add_grob(fitted_plot[,1:3], 1, 1) %>%
+        gtable_add_grob(fitted_plot[,4:5], 1, 2) %>%
+        gtable_add_grob(residual_hist[,4:5], 1, 3) %>%
+        grid.draw()
+
+}
+
+
+
+
+plot.residuals.2 = function(m) {
+    data = data.frame(
+        eval(m$call$data),
+        `Fitted JND`=fitted(m), 
+        `Normalized Quantile Residuals`=resid(m),
+        check.names=FALSE) 
+        
+#    m.sd = loess(I(sqrt(abs(data$`Normalized Quantile Residuals`))) ~ data$`Fitted JND`)
+#    scale_location = data.frame(
+#        `Fitted JND` = data$`Fitted JND`,
+#        standard_deviation=fitted(m.sd),
+#        check.names=FALSE)
+
+    scale_location = data.frame(
+        `Fitted JND` = data$`Fitted JND`,
+        standard_deviation=rollmean(sqrt(abs(data$`Normalized Quantile Residuals`)), 200, fill=NA),
+        check.names=FALSE)
+
+    fitted_plot = ggplot(data, 
+            aes(x=`Fitted JND`, y=`Normalized Quantile Residuals`)
+        ) +
+        geom_point(alpha=0.1) +
+        geom_rug(sides="r", color="skyblue") +
+        geom_hline(y=0, linetype="dashed") + 
+        #geom_linerange(data=scale_location, aes(ymin=standard_deviation, ymax=-standard_deviation, y=NULL), color="red", size=1) +
+        geom_line(data=scale_location, aes(y=standard_deviation), color="red", size=1, linetype="dashed") +
+        geom_line(data=scale_location, aes(y=-standard_deviation), color="red", size=0.5, linetype="dashed") +
+        ylim(-5.5,5.5) +
+        xlim(min(data$`Fitted JND`), max(data$`Fitted JND`))
+    fitted_plot = ggplotGrob(fitted_plot)
+        
+
+    residual_hist = ggplot(data, aes(x=`Normalized Quantile Residuals`)) +
+        stat_density(fill="skyblue") +
+        geom_vline(x=0, linetype="dashed") + 
+        xlim(-5.5,5.5) +
+        ylim(0,0.6) +
+        stat_function(fun=dnorm, linetype="dashed") +
+        coord_flip()
+    residual_hist = ggplotGrob(residual_hist)
+    
+    grid.newpage()
+    gtable(heights=unit(1,"null"), widths=unit(c(3,1,8),c("lines","null","lines"))) %>%
+        gtable_add_grob(fitted_plot[,1:3], 1, 1) %>%
+        gtable_add_grob(fitted_plot[,4:5], 1, 2) %>%
+        gtable_add_grob(residual_hist[,4:5], 1, 3) %>%
+        grid.draw()
+
+}
+
+
+plot.residuals.binned = function(m) {
+    data.frame(
+        eval(m$call$data),
+        `Fitted JND`=fitted(m), 
+        `Normalized Quantile Residuals`=resid(m), 
+        check.names=FALSE) %>%
+    ggplot(aes(x=`Fitted JND`, y=`Normalized Quantile Residuals`)) + 
+        stat_bin2d(bins=50,
+        #breaks=list(
+        #    x=seq(0.25, .85, by=.1)), 
+            #y=seq(-5,5, length=30)),
+        fill="black", mapping=aes(alpha=..density..))
+}
+
+plot.residual.density = function(m) {
+    data.frame(
+        `Fitted JND`=fitted(m), 
+        `Normalized Quantile Residuals`=resid(m), 
+        check.names=FALSE) %>%
+    ggplot(aes(x=`Normalized Quantile Residuals`)) + 
+        stat_density() + 
+        geom_rug()
+}
+
+```
+
+# Bayesian log-linear model with censoring
+
+# Precision of estimation for random correlations rendered using each chart type
+ 
+
