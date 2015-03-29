@@ -188,13 +188,68 @@ df$approach = relevel(df$approach, "below")
 contrasts(df$approach) = contr.sum
 ```
 
-# Original linear model
+# Weber-style model versus linear model fit to all data
+```{r weber_example}
+weber_data_df = filter(df, visandsign == "scatterplotpositive", !mad_cutoff)
+
+weber_df = weber_data_df %>%
+    group_by(approach, r) %>%
+    summarize(jnd = mean(jnd))
+
+adjusted_weber_df = weber_df %>%
+    group_by(r) %>%
+    summarize(mean.jnd=mean(jnd)) %>%
+    join(weber_df) %>%
+    mutate(r_A = r + ifelse(approach == "above", 0.5, -0.5) * mean.jnd) 
+
+#openGraph(6,5)    
+ggplot(
+        weber_data_df,
+        aes(x=r,
+            y=jnd
+            )) + 
+    geom_point(size=3, alpha=.25, color="#999999") +  
+    geom_point(data=weber_df, mapping=aes(color=approach, x=r), size=5, alpha=.99) +
+    geom_segment(data=adjusted_weber_df, mapping=aes(color=approach, x=r, xend=r_A, yend=jnd), size=1, arrow=arrow(type="closed", length=unit(7, "point"))) +
+    scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
+    xlim(0.2, 0.9) + ylim(0, 0.3)
+#saveGraph("output/weber-comparison-1", "pdf")
+
+#openGraph(6,5)    
+ggplot(
+        adjusted_weber_df,
+        aes(x=r_A,
+            y=jnd
+            )) + 
+    geom_point(mapping=aes(color=approach), size=5, alpha=0.99) +
+    stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed", color="black") +
+    scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
+    xlim(0.2, 0.9) + ylim(0, 0.3)
+#saveGraph("output/weber-comparison-2", "pdf")
+    
+    
+m = lm(log(jnd) ~ r, data=weber_data_df)
+#openGraph(6,5)
+ggplot(
+        weber_data_df,
+        aes(x=r,
+            y=jnd
+            )) + 
+    geom_point(size=3, alpha=.25, color="#999999") +  
+    stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed", color="black") +
+    stat_function(fun=function(x) exp(coef(m)[[1]] + x*coef(m)[[2]]), color="black", linetype="dashed") +
+    xlim(0.2, 0.9) + ylim(0, 0.3)
+#saveGraph("output/weber-comparison-3", "pdf")
+
+```
+
+# Linear model
 Let's see an example of approach:
 
 ```{r approach_example}
-openGraph(6,5)
+#openGraph(6,5)
 ggplot(
-        filter(df, !mad_cutoff),
+        filter(df, visandsign == "parallelCoordinatesnegative", !mad_cutoff),
         aes(x=r, 
             y=jnd,
             color=approach
@@ -202,9 +257,9 @@ ggplot(
     geom_point(size=3, alpha=.15) +  
     stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed") +
     stat_smooth(method=lm, se=FALSE, mapping=aes(group=NA), size=1, color="black", linetype="dashed") +
-    scale_color_discrete(h=c(60, 240), c=70, l=63) +
+    scale_color_manual(values=c("#d62d0e", "#066fff")) +
     ylim(0,0.3)
-saveGraph("output/approach-example", "pdf")
+#saveGraph("output/approach-example", "pdf")
 
 ```
 
@@ -220,13 +275,13 @@ plot(m.linear)
 ```
 
 ```{r linear_model_plot, include=FALSE, cache=FALSE}
-openGraph(7,5)
+#openGraph(7,5)
 plot.residuals(m.linear)
-saveGraph("output/residuals-linear", "pdf")
+#saveGraph("output/residuals-linear", "pdf")
 
-openGraph(4,5)
+#openGraph(4,5)
 plot.r.residuals(df, m.linear, "scatterplotnegative")
-saveGraph("output/residuals-linear-by_r-scatterplotnegative", "pdf")
+#saveGraph("output/residuals-linear-by_r-scatterplotnegative", "pdf")
 ```
 
 # Log-linear model
@@ -254,13 +309,13 @@ plot(m.loglinear)
 ```
 
 ```{r log_linear_model_plot, include=FALSE, cache=FALSE}
-openGraph(7,5)
+#openGraph(7,5)
 plot.residuals(m.loglinear, log_x=TRUE)
-saveGraph("output/residuals-loglinear", "pdf")
+#saveGraph("output/residuals-loglinear", "pdf")
 
-openGraph(4,5)
+#openGraph(4,5)
 plot.r.residuals(df, m.loglinear, "scatterplotnegative", log_y=TRUE)
-saveGraph("output/residuals-loglinear-by_r-scatterplotnegative", "pdf")
+#saveGraph("output/residuals-loglinear-by_r-scatterplotnegative", "pdf")
 ```
 
 Note that the residuals here are more well-behaved in terms of normality and
@@ -278,6 +333,62 @@ pander(AIC(m.linear, m.loglinear))
 
 
 # Log-linear model with censoring
+First let's explain censoring. 
+
+```{r censored distribution example}
+actual_data = data.frame(x = rnorm(5000))
+breaks = seq(min(actual_data$x), max(actual_data$x), length=30)
+c = breaks[which.min(abs(breaks - 0.5))]  #make sure c ~= 1 and lines up with histogram breaks
+
+actual_data$censored = actual_data$x > c
+observed_data = actual_data %>% 
+    mutate(x = ifelse(censored, c, x),
+           dist = "observed")
+actual_data$dist = "actual"
+
+censored_data = rbind(actual_data, observed_data)
+censored_data_means = censored_data %>%
+    group_by(dist) %>%
+    summarize(x=mean(x))
+
+#openGraph(7,7)
+ggplot(censored_data, aes(
+        x = x,
+        fill = censored,
+        )) + 
+    stat_bin(breaks=breaks) +
+    geom_vline(xintercept=c, size=1, linetype="dashed") +
+    geom_vline(data=censored_data_means, mapping=aes(xintercept=x), size=1, linetype="dashed") +
+    facet_wrap(~dist, ncol=1)
+#saveGraph("output/censored-example", "pdf")
+```    
+
+Next, let's look at some data to decide what to censor
+
+```{r looking_at_data_for_censoring}
+ggplot(
+        filter(df, approach=="above"),
+        aes(x=r, 
+            y=log2(jnd),
+            color=not_censored
+    )) + 
+    geom_point(alpha=.25, size=2) + 
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") + 
+    facet_wrap(~visandsign)
+
+ggplot(
+        filter(df, approach=="below"),
+        aes(x=r, 
+            y=log2(jnd),
+            color=not_censored
+    )) + 
+    geom_point(alpha=.25, size=2) + 
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    stat_function(fun=function(x) log2(x), lty="dashed", color="black") + 
+    facet_wrap(~visandsign)
+```
+
 This model addresses outliers through censoring. We remove both filters used in
 the original paper, and instead uses censoring for values that are close to or
 worse than chance, or close to or past the ceiling of JND (from above) and the
@@ -308,12 +419,50 @@ plot(m.censored)
 ```
 
 ```{r censored_model_plot, include=FALSE, cache=FALSE}
-openGraph(7,5)
+#openGraph(7,5)
 plot.residuals(m.censored, log_x=TRUE)
-saveGraph("output/residuals-censored", "pdf")
+#saveGraph("output/residuals-censored", "pdf")
 ```
 
 # Bayesian log-linear model with censoring
+
+
+# Random slopes
+
+Turns out there isn't a whole lot of variation in slopes, so the fact that we can't estimate it doesn't seem like that much of a problem:
+
+coefs = coef(m.censored)
+visandsigns.1 = levels(df$visandsign)[-1]
+model_fits = rbind(data.frame(
+    visandsign = levels(df$visandsign)[1],
+    intercept = coefs[["(Intercept)"]], 
+    slope = coefs[["r"]]
+), data.frame(
+    visandsign = visandsigns.1,
+    intercept = coefs[["(Intercept)"]] + coefs[paste0("visandsign", visandsigns.1)], 
+    slope = coefs[["r"]] + coefs[paste0("r:visandsign", visandsigns.1)] 
+)) %>% mutate(
+    intercept = intercept / log(2),
+    slope = slope / log(2)
+)
+
+
+```{r participant_slopes}
+ggplot(
+        df,
+        aes(x=r, 
+            y=log2(jnd)
+    )) + 
+    geom_point(alpha=.25, color="#999999", size=2) + 
+    geom_hline(yintercept=log(.45), lty="dashed") + 
+    geom_hline(yintercept=log(.40), lty="dashed") + 
+    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") + 
+    stat_function(fun=function(x) log2(x), lty="dashed", color="black") +
+    geom_abline(data=model_fits, mapping=aes(intercept, slope)) +
+    facet_wrap(~visandsign)
+```
+
+
 
 # Precision of estimation for random correlations rendered using each chart type
  

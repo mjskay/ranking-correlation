@@ -61,7 +61,7 @@ model {
 
 	#zero vector
 	zero_vector[1] <- 0
-	zero_vector[1] <- 0
+	zero_vector[2] <- 0
 
 	#identity matrix
 	I_2[1,1] <- 1
@@ -78,7 +78,9 @@ model {
 	#PREDICTIONS
 	", if (include_predictions) "
 	for (i in 1:n_pred) {
-		pred_mu[i] <- b[pred_visandsign_number[i],1] + b[pred_visandsign_number[i],2]*pred_r[i]
+		pred_u[i,1:2] ~ dmnorm(zero_vector[], u_Sigma_inverse[pred_visandsign_number[i],,])
+		pred_mu[i] <- b[pred_visandsign_number[i],1] + b[pred_visandsign_number[i],2]*pred_r[i] +
+					pred_u[i,1] + pred_u[i,2]*pred_r[i]
     	pred_y[i] ~ dlnorm(pred_mu[i], tau[pred_visandsign_number[i]])
 	}" else "", "
 
@@ -173,7 +175,8 @@ if (include_predictions) parameters = c(parameters, "pred_y")
 
 
 if (!final_model) {
-    jagsModel = run.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list)
+    jagsModel = run.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list, 
+        method="parallel")
 } else {
     jagsModel = autorun.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list,
         method="parallel", thin.sample=TRUE)    

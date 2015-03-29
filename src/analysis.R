@@ -78,23 +78,6 @@ ggplot(
 
 
 
-theme_set(theme_get() + theme(
-    text=element_text(size=16, family="Avenir"),
-    axis.text=element_text(size=rel(15/16)),
-    axis.ticks.length=unit(8, "points"),
-    line=element_line(size=1)
-))
-
-
-ggplot(
-        filter(df, visandsign == "parallelCoordinatesnegative" & !mad_cutoff),
-        aes(x=r, 
-            y=jnd,
-            color=approach
-            )) + 
-    geom_point(size=2, alpha=.25) +  
-    stat_smooth(method=lm, se=FALSE) +
-    stat_smooth(method=lm, se=FALSE, mapping=aes(group=NA))
      
 
 
