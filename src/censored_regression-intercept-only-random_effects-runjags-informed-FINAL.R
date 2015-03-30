@@ -8,6 +8,8 @@ library(ggplot2)
 library(grid)
 library(plyr)
 library(dplyr)
+library(stringr)
+library(scales)
 
 memory.limit(8000)
 
@@ -47,16 +49,16 @@ model {
 	#priors
 	for (v in 1:n_visandsigns) {
 		#priors for coefficents of fixed effects
-		b[v,1] ~ dnorm(log(.45), 0.05)	#prior on intercept is chance
-		b[v,2] ~ dnorm(0, 0.01)
-		b[v,3] ~ dnorm(0, 0.8)
-		b[v,4] ~ dnorm(0, 0.8)
+		b[v,1] ~ dnorm(log(.45), 1)	#prior on intercept is chance
+		b[v,2] ~ dnorm(0, 0.05)
+		b[v,3] ~ dnorm(0, 4)
+		b[v,4] ~ dnorm(0, 4)
 
     	#prior on variance of latent variable
-    	tau[v] ~ dgamma(0.01, 0.01)
+    	tau[v] ~ dgamma(1, 1)
 
 		#prior on random effects
-        u_tau[v] ~ dgamma(0.01, 0.01)
+		u_tau[v] ~ dgamma(1, 1)
 	}
 
 	#EXPECTED PERFORMANCE ON RANDOM DATASET
@@ -170,44 +172,39 @@ if (!final_model) {
     jagsModel = run.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list, 
         method="parallel")
 } else {
-    jagsModel = autorun.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list,
-        method="parallel", thin.sample=TRUE)    
+#    jagsModel = autorun.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list,
+#        method="parallel", thin.sample=TRUE)    
+    jagsModel = run.jags("model.txt", data=dataList, monitor=parameters, initlist=inits_list,
+	    adapt=5000, burnin = 100000, sample = 10000, thin=10,
+        method="parallel")
 }
-
-codaSamples = as.mcmc.list(jagsModel)
-
-# Create, initialize, and adapt the model:
-#jagsModel = jags.model( "model.txt" , data=dataList, initlist=inits_list , 
-#                        n.chains=nChains , n.adapt=adaptSteps )
-#
-## Burn-in:
-#cat( "Burning in the MCMC chain...\n" )
-#update( jagsModel , n.iter=burnInSteps )
-#
-## The saved MCMC chain:
-#cat( "Sampling final MCMC chain...\n" )
-#codaSamples = coda.samples( jagsModel , variable.names=parameters , 
-#                            n.iter=nPerChain , thin=thinSteps )
-# resulting codaSamples object has these indices: 
-#   codaSamples[[ chainIdx ]][ stepIdx , paramIdx ]
 
 
 #------------------------------------------------------------------------------
 # EXAMINE THE RESULTS
 
+codaSamples = as.mcmc.list(jagsModel)
+
 checkConvergence = FALSE
 if ( checkConvergence ) {
-  show( summary( codaSamples ) )
-  openGraph()
-  plot( codaSamples , ask=F )  
-  openGraph()
-  autocorr.plot( codaSamples , ask=T )
+    plot(jagsModel, vars="^b", file="output/model-params-b.pdf")
+    plot(jagsModel, vars="^tau", file="output/model-params-tau.pdf")
+    plot(jagsModel, vars="^u_tau", file="output/model-params-u_tau.pdf")
+    plot(jagsModel, vars="^typ", file="output/model-params-typical_mu.pdf")
+    plot(jagsModel, vars="^pred", file="output/model-params-pred.pdf")
+
+    summary(jagsModel)
+    pdf(file="output/model-autocorr.pdf")
+    autocorr.plot(codaSamples, ask=FALSE)
+    dev.off()
 }
 
 # Convert coda-object codaSamples to matrix object for easier handling.
 # But note that this concatenates the different chains into one long chain.
 # Result is mcmcChain[ stepIdx , paramIdx ]
 mcmcChain = as.matrix( codaSamples )
+rm("codaSamples")
+rm("jagsModel")
 thinIndex = ceiling(seq(1, nrow(mcmcChain), by=1))#length=500))
 
 # Extract chain values:
@@ -290,7 +287,11 @@ extract_sample_long = function(mcmcChain, variable_name, index_names) {
 bdf = extract_sample(mcmcChain, ~ b[visandsign_number, ..]) %>%
     mutate(visandsign = factor(visandsigns[visandsign_number])) %>%
     select(-visandsign_number)
-bdf_m = ddply(bdf, ~ visandsign, summarize, b1=median(b1), b2=median(b2), b3=median(b3))
+bdf_m = ddply(bdf, ~ visandsign, summarize, b1=median(b1), b2=median(b2), b3=median(b3)) %>%
+    mutate(
+        vis = factor(str_sub(visandsign, end=-9)),
+        sign = factor(str_sub(visandsign, start=-8))
+    )
 pred_df$visandsign = factor(pred_df$visandsign_number, labels=visandsigns)
 pdfb = extract_1d_vector_sample(pred_df, "pred_y", n_pred)
 
@@ -301,27 +302,85 @@ for (i in 1:length(visandsigns)) {
     typical_mu[[paste0("typical_mu", i)]] = NULL
 }
 
+#differences between groups
+typical_mu$group1 = rowMeans(typical_mu[,c("scatterplotnegative","scatterplotpositive","parallelCoordinatesnegative")])
+typical_mu$group2 = rowMeans(typical_mu[,c("ordered_linepositive","donutnegative","stackedbarnegative","ordered_linenegative","stackedlinenegative","stackedareanegative")])
+typical_mu$group3 = rowMeans(typical_mu[,c("parallelCoordinatespositive","radarpositive","linepositive")])
+typical_mu$group4 = rowMeans(typical_mu[,c("donutpositive", "linenegative", "radarnegative", "stackedareapositive", "stackedbarpositive", "stackedlinepositive")])
+tm_group_comp = rbind(
+    data.frame(comparison="2-1", difference=with(typical_mu, group2 - group1)),
+    data.frame(comparison="3-2", difference=with(typical_mu, group3 - group2)),
+    data.frame(comparison="4-3", difference=with(typical_mu, group4 - group3))
+)
+openGraph(5,5)
+ggplot(tm_group_comp,
+        aes(x=comparison, y=difference/log(2))) + 
+    geom_violin(linetype=0, fill="skyblue") + 
+    geom_hline(yintercept=0, lty="dashed") +
+    stat_summary(fun.data="median_hilow", alpha=.99) +
+    coord_flip() 
+saveGraph("output/mu-group-comparison", "pdf")
+
+
 #tau
 taudf=extract_sample(mcmcChain, ~ tau[visandsign_number])
-taudf$visandsign = factor(visandsigns[tau$visandsign_number])
+taudf$visandsign = factor(visandsigns[taudf$visandsign_number])
+ggplot(taudf,
+        aes(x=visandsign, y=sqrt(1/tau))) + 
+    geom_violin(linetype=0, fill="skyblue") + 
+    stat_summary(fun.data="median_hilow") +
+    coord_flip() 
+
+utaudf=extract_sample(mcmcChain, ~ u_tau[visandsign_number])
+utaudf$visandsign = factor(visandsigns[utaudf$visandsign_number])
+openGraph(7,5)
+ggplot(filter(utaudf, visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")),
+        aes(x=visandsign, y=sqrt(1/u_tau))) + 
+    geom_violin(linetype=0, fill="skyblue") + 
+    stat_summary(fun.data="median_hilow", alpha=.99) +
+    coord_flip() 
+saveGraph("output/u_tau-high_precision_group", "pdf")
+
 
 
 #typical mu
 tmdf=extract_sample(mcmcChain, ~ typical_mu[visandsign_number])
 tmdf$visandsign = factor(visandsigns[tmdf$visandsign_number])
 tmdf$visandsign_bymean = with(tmdf, reorder(visandsign, -typical_mu, mean))
-tmdf_intervals = ddply(tmdf, ~ visandsign_bymean, summarize, 
-    tm_mean=mean(typical_mu), tm_lower=quantile(typical_mu,.025), tm_upper=quantile(typical_mu,.975))
 ggplot(tmdf,
         aes(x=visandsign_bymean, y=typical_mu)) + 
         geom_violin(linetype=0, fill="skyblue") + 
         geom_hline(yintercept=log(.45), lty="dashed") +
-        geom_segment(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, xend=visandsign_bymean, y=tm_lower, yend=tm_upper), size=1.25) +
-        geom_point(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, y=tm_mean), size=3, shape=3) +
+        stat_summary(fun.data="median_hilow") +
 #        ylim(-3.5, 0) +
         coord_flip() +
         theme_bw()
-grid.edit("geom_point.points", grep = TRUE, gp = gpar(lwd = 3))
+
+#generate pairwise comparisons of adjacent conditions
+tmdf_comparison = filter(tmdf, visandsign != "radarnegative") %>%
+    arrange(visandsign_bymean)
+names(tmdf_comparison) = paste0(names(tmdf_comparison), "1")
+tmdf_2 = filter(tmdf, visandsign != "scatterplotpositive") %>%
+    arrange(visandsign_bymean)
+names(tmdf_2) = paste0(names(tmdf_2), "2")
+tmdf_comparison = cbind(tmdf_comparison, tmdf_2) %>%
+    mutate(
+        comparison = factor(paste0(visandsign_bymean1, " - ", visandsign_bymean2)),
+        typical_mu_difference = typical_mu2 - typical_mu1
+    )
+tmdf_comparison$comparison = reorder(tmdf_comparison$comparison, as.numeric(tmdf_comparison$visandsign_bymean1))
+
+ggplot(tmdf_comparison,
+        aes(x=comparison, y=typical_mu_difference)) + 
+    geom_violin(linetype=0, fill="skyblue") + 
+    geom_hline(yintercept=0, lty="dashed") +
+    stat_summary(fun.data="median_hilow") +
+#    geom_segment(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, xend=visandsign_bymean, y=tm_lower, yend=tm_upper), size=1.25) +
+#    geom_point(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, y=tm_mean), size=3, shape=3) +
+#        ylim(-3.5, 0) +
+    coord_flip()
+
+
     
 
 #log-space model posteriors
@@ -377,16 +436,23 @@ ggplot(
 
 #log-space model posteriors
 pred_r_step = .1/8
-pred_r_min = .1
-pred_r_max = .9
+pred_r_min = .3
+pred_r_max = .8
 
 rdf = ldply(seq(pred_r_min, pred_r_max, pred_r_step), function(r) {
         within(bdf, {
             r <- r
             logy <- b1 + b2*r
         })
-    })
-rdf_m = ddply(rdf, ~ visandsign + r, summarize, logy=mean(logy))
+    }) %>%
+    select(-b3, -b4) %>%	#don't need b3 / b4 for this
+    mutate(
+        vis = factor(str_sub(visandsign, end=-9)),
+        sign = factor(str_sub(visandsign, start=-8))
+        )
+rdf_m = rdf %>% 
+    group_by(visandsign, r) %>%
+    summarise(logy=mean(logy))
 
 
 ggplot(
@@ -415,20 +481,27 @@ ggplot(
 
 
 #log-space fit lines, single plot, no data
+openGraph(9, 5.5)
 ggplot(
         rdf,
         aes(x=r, 
-            y=logy,
-            color=visandsign
+            y=logy/log(2),
+            group=visandsign
         )) + 
 	geom_bin2d(breaks=list(
 			x=seq(pred_r_min - pred_r_step/2, pred_r_max + pred_r_step/2, pred_r_step), 
-			y=seq(min(rdf$logy), max(rdf$logy), length=150)
-		), mapping=aes(alpha=..density.., fill=visandsign, color=NULL)) +
+			y=seq(min(rdf$logy/log(2)), max(rdf$logy/log(2)), length=150)
+		), mapping=aes(alpha=..density.., fill=vis, color=NULL)) +
+    geom_abline(data=bdf_m, mapping=aes(intercept=b1/log(2), slope=b2/log(2), color=vis, linetype=sign), size=1) + 
+    geom_text(data=bdf_m, mapping=aes(y=I(b1/log(2) + .9 * b2/log(2)), x=.9, color=vis, label=visandsign)) +
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
     scale_alpha_continuous(range=c(0.01,0.6)) + 
-    geom_abline(data=bdf_m, mapping=aes(intercept=b1, slope=b2, color=visandsign), size=1) + 
-    geom_hline(yintercept=log(.45), lty="dashed") + 
-    stat_function(fun=function(x) log(1 - x), lty="dashed", color="black")
+    scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
+    scale_x_continuous(breaks=seq(0.3,0.8,by=0.1)) +
+    annotation_logticks(sides="l")
+saveGraph("output/final-model-log-space.pdf")
+    
     
 #linear-space fit lines, single plot, no data
 ggplot(
@@ -499,44 +572,9 @@ alpha_sample = as.matrix(alpha_sample_full[model_number_sample == best_model])
 if (include_predictions) pred_y_sample = pred_y_sample_full[model_number_sample == best_model,]
 chain_length = nrow(b0_sample)
 
-#get sample summaries
-sampleSummary = summary(codaSamples)
-
-#subset codaSamples to only those in the best model
-codaSamplesBest = codaSamples
-for (i in 1:length(codaSamplesBest)) {
-	codaSamplesBest[[i]] = coda::as.mcmc(codaSamplesBest[[1]][codaSamplesBest[[1]][,"model_number"] == best_model,])
-}
-sampleSummaryBest = summary(codaSamplesBest)
-
-#get predictions
-if (include_predictions) {
-	pred_df$pred_y_mean = laply(1:n_pred, function (i) {				
-		sampleSummaryBest$statistics[paste("pred_y[", i, "]", sep=""),"Mean"]		
-		})
-	pred_df$pred_y_median = laply(1:n_pred, function (i) {				
-		sampleSummaryBest$quantiles[paste("pred_y[", i, "]", sep=""),"50%"]
-		})
-	pred_df$pred_y_hdi = laply(1:n_pred, function (i) {				
-		#highest-density interval
-		hi = hist(pred_y_sample[,i], breaks=0:7 + 0.5)
-		hi$mids[which(hi$density == max(hi$density))]
-		})
-	sqrt(mean((pred_df$acceptable_number - pred_df$pred_y_mean)^2, na.rm=TRUE))
-	mean(abs(pred_df$acceptable_number - pred_df$pred_y_median), na.rm=TRUE)
-	sqrt(mean((pred_df$acceptable_number - mean(pred_df$acceptable_number, na.rm=TRUE))^2, na.rm=TRUE))
-	mean(abs(pred_df$acceptable_number - median(pred_df$acceptable_number, na.rm=TRUE)), na.rm=TRUE)
-	
-	write.csv(pred_df, file=paste("weather_rain_regression-scale_new-",
-							(if (final_model) "final" else "not_final"), 
-							"_predictions.csv", sep=""))
-}
-
-
 #save
-save.image(file=paste("output/censored_regression-random_effects-uncorrelated", 
+save.image(file=paste("output/censored_regression-random_effects-intercept-FINAL", 
 				(if (final_model) "final" else "not_final"),
 				".RData", sep=""))
-#load("output/censored_regression-no_random_effects-final.RData")
+#load("output/censored_regression-random_effects-intercept-FINALfinal.RData")
 
-#source("weather_rain_regression_parameter_plots.R")

@@ -1,3 +1,14 @@
+Rensink_se = .02
+Rensink_n = 20
+Rensink_sigma = Rensink_se * sqrt(Rensink_n)
+Rensink_mu = .2
+
+sigma_f = function(sigma) abs((exp(sigma^2) - 1) * exp(2*log(Rensink_mu) + sigma^2) - Rensink_sigma^2)
+Rensink_log_sigma = optimize(sigma_f, c(0.000001,10), tol=.00000001)$minimum
+
+
+
+
 #derive some reasonable priors
 Rensink_slope = -.24
 Rensink_intercept = .24/.907
@@ -12,26 +23,27 @@ Rensink_log_jnd = function(r) Rensink_log_intercept + Rensink_log_slope * r
 #(say, the sd is equal to abs(slope), such that it's reasonable to see a JND at r==.3 that
 #is comparable to the mean JND at r==.8)
 sd_1 = log(Rensink_jnd(.3)) - log(Rensink_jnd(.8))
-#now let's assume the actual sd can be as high 3 times this
-sd_2 = sd_1 * 3
+#now let's assume the actual sd can be as high as 2 times this
+sd_2 = sd_1 * 2
 #prior on variance
 tau_inverse_max = sd_2^2
 tau_max = 1/tau_inverse_max
 
 
-#Now a prior on the intercept: chance, with variance on the order of tau_inverse_max
+#Now a prior on the intercept: chance, with variance on the order of twice the distance to the scatteplot intercept
 b_1 = log(.45)
-b_1_tau = tau_max
+b_1_sd = 2 * (log(.45) - Rensink_log_intercept)
+b_1_tau = 1/(b_1_sd^2)
 
 
-#prior on the slope: half the Rensink slope over the same space, up to twice it
-b_2 = Rensink_log_slope / 2
+#prior on the slope: up to twice it
+b_2 = 0
 b_2_sd = 2 * abs(Rensink_log_slope)
 b_2_tau = 1/(b_2_sd^2)
 
-#prior on approach effect: approximately half the same as Rensink at r = .3, up to 2 times it
-b_3 = (log(.2) - log(.16))/2
-b_3_sd = 4 * b_3
+#prior on approach effect: approximately the same as Rensink at r = .3, up to 2 times it
+b_3 = (log(.2) - log(.16))
+b_3_sd = 2 * b_3
 b_3_tau = 1/(b_3_sd^2)
 
 #prior on approach interaction: 0, with same scale as approach effect

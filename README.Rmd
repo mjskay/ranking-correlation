@@ -300,7 +300,8 @@ It also addresses the problem of the original model making nonsensical
 predictions (like JNDs less than 0).
 
 ```{r log_linear_model}
-m.loglinear = gamlss(jnd ~ r * visandsign * approach,
+df$approach_value = contrasts(df$approach)[df$approach] #make numeric so we can easily make predictions without it
+m.loglinear = gamlss(jnd ~ r * visandsign * approach_value,
     sigma.formula = ~ visandsign,
     data=filter(df, !mad_cutoff & !p_chance_cutoff),
     family=LOGNO
@@ -400,8 +401,8 @@ First, we derive the thresholds used for censoring.
 #censorship based on being above / below ceiling/floor , and chance
 df = mutate(df,
     censoring_threshold = ifelse(approach == "below", 
-                    pmin(r - .05, .4), 
-                    pmin(.95 - r, .4)),
+                    pmin(r, .4), 
+                    pmin(1 - r, .4)),
     not_censored = jnd <= censoring_threshold,
     censored_jnd = pmin(jnd, censoring_threshold)
 )
@@ -410,12 +411,46 @@ df = mutate(df,
 Then, we build the censored model.
 
 ```{r censored_model}
-m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach,
+m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach_value,
     sigma.formula = ~ visandsign,
     data=df,
     family=cens(LOGNO)
     )
 plot(m.censored)
+```
+
+Now let's compare to the non-censored model
+
+```{r censored_verses_not_comparison}
+m.loglinear.all = gamlss(jnd ~ r * visandsign * approach_value,
+    sigma.formula = ~ visandsign,
+    data=df,
+    family=LOGNO
+    )
+
+#get fits from models
+models = list(uncensored=m.loglinear.all, censored=m.censored)
+model_fits = ldply(c("uncensored", "censored"), function(m) {
+    expand.grid(r=c(.1, .9), visandsign=levels(df$visandsign)) %>%
+    mutate(approach_value = 0) %>%
+    cbind(prediction = predict(models[[m]], newdata=.)) %>%
+    mutate(model = m)
+})
+
+
+ggplot(
+        df,
+        aes(x=r, 
+            y=log2(jnd),
+            color=not_censored
+    )) + 
+    geom_point(alpha=.25, size=2) + 
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
+    geom_line(data=model_fits, mapping=aes(y=prediction/log(2), color=model)) + 
+    facet_wrap(~visandsign)
+
+
 ```
 
 ```{r censored_model_plot, include=FALSE, cache=FALSE}
@@ -431,22 +466,6 @@ plot.residuals(m.censored, log_x=TRUE)
 
 Turns out there isn't a whole lot of variation in slopes, so the fact that we can't estimate it doesn't seem like that much of a problem:
 
-coefs = coef(m.censored)
-visandsigns.1 = levels(df$visandsign)[-1]
-model_fits = rbind(data.frame(
-    visandsign = levels(df$visandsign)[1],
-    intercept = coefs[["(Intercept)"]], 
-    slope = coefs[["r"]]
-), data.frame(
-    visandsign = visandsigns.1,
-    intercept = coefs[["(Intercept)"]] + coefs[paste0("visandsign", visandsigns.1)], 
-    slope = coefs[["r"]] + coefs[paste0("r:visandsign", visandsigns.1)] 
-)) %>% mutate(
-    intercept = intercept / log(2),
-    slope = slope / log(2)
-)
-
-
 ```{r participant_slopes}
 ggplot(
         df,
@@ -454,11 +473,11 @@ ggplot(
             y=log2(jnd)
     )) + 
     geom_point(alpha=.25, color="#999999", size=2) + 
+    stat_smooth(method=lm, alpha=.1, mapping=aes(group=participant), se=FALSE) +
     geom_hline(yintercept=log(.45), lty="dashed") + 
     geom_hline(yintercept=log(.40), lty="dashed") + 
     stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") + 
     stat_function(fun=function(x) log2(x), lty="dashed", color="black") +
-    geom_abline(data=model_fits, mapping=aes(intercept, slope)) +
     facet_wrap(~visandsign)
 ```
 
