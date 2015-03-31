@@ -367,19 +367,26 @@ ggplot(censored_data, aes(
 Next, let's look at some data to decide what to censor
 
 ```{r looking_at_data_for_censoring}
+openGraph(7.5,4)
 ggplot(
-        filter(df, approach=="above"),
+        filter(df, approach=="above", visandsign %in% c("linepositive","stackedareapositive")),
         aes(x=r, 
             y=log2(jnd),
             color=not_censored
     )) + 
     geom_point(alpha=.25, size=2) + 
     geom_hline(yintercept=log2(.45), lty="dashed") + 
-    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") + 
+    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
+    annotation_logticks(sides="l") +
+    scale_y_continuous(
+        limits=c(-6, -0.2),
+        labels=trans_format(function(x) 2^x, math_format(.x))) +
     facet_wrap(~visandsign)
+saveGraph("output/censor-from-above.pdf")
 
+openGraph(7.5,4)
 ggplot(
-        filter(df, approach=="below"),
+        filter(df, approach=="below", visandsign %in% c("parallelCoordinatespositive","parallelCoordinatesnegative")),
         aes(x=r, 
             y=log2(jnd),
             color=not_censored
@@ -387,7 +394,12 @@ ggplot(
     geom_point(alpha=.25, size=2) + 
     geom_hline(yintercept=log2(.45), lty="dashed") + 
     stat_function(fun=function(x) log2(x), lty="dashed", color="black") + 
+    annotation_logticks(sides="l") +
+    scale_y_continuous(
+        limits=c(-6, -0.2),
+        labels=trans_format(function(x) 2^x, math_format(.x))) +
     facet_wrap(~visandsign)
+saveGraph("output/censor-from-below.pdf")
 ```
 
 This model addresses outliers through censoring. We remove both filters used in
@@ -401,8 +413,8 @@ First, we derive the thresholds used for censoring.
 #censorship based on being above / below ceiling/floor , and chance
 df = mutate(df,
     censoring_threshold = ifelse(approach == "below", 
-                    pmin(r, .4), 
-                    pmin(1 - r, .4)),
+                    pmin(r - .05, .4), 
+                    pmin(.95 - r, .4)),
     not_censored = jnd <= censoring_threshold,
     censored_jnd = pmin(jnd, censoring_threshold)
 )
@@ -431,25 +443,29 @@ m.loglinear.all = gamlss(jnd ~ r * visandsign * approach_value,
 #get fits from models
 models = list(uncensored=m.loglinear.all, censored=m.censored)
 model_fits = ldply(c("uncensored", "censored"), function(m) {
-    expand.grid(r=c(.1, .9), visandsign=levels(df$visandsign)) %>%
+    expand.grid(r=c(.2, .9), visandsign=levels(df$visandsign)) %>%
     mutate(approach_value = 0) %>%
     cbind(prediction = predict(models[[m]], newdata=.)) %>%
     mutate(model = m)
 })
 
 
+openGraph(7.5,4)
 ggplot(
-        df,
+        filter(df, visandsign %in% c("linepositive","parallelCoordinatespositive")),
         aes(x=r, 
             y=log2(jnd),
-            color=not_censored
     )) + 
-    geom_point(alpha=.25, size=2) + 
+    geom_point(alpha=.25, size=3, color="#999999") + 
     geom_hline(yintercept=log2(.45), lty="dashed") + 
-    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
-    geom_line(data=model_fits, mapping=aes(y=prediction/log(2), color=model)) + 
+#    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
+    geom_line(data=filter(model_fits, visandsign %in% c("linepositive","parallelCoordinatespositive")), mapping=aes(y=prediction/log(2), color=model)) + 
+    annotation_logticks(sides="l") +
+    scale_y_continuous(
+        limits=c(-6, -0.2),
+        labels=trans_format(function(x) 2^x, math_format(.x))) +
     facet_wrap(~visandsign)
-
+saveGraph("output/censor-bias", "pdf")
 
 ```
 
