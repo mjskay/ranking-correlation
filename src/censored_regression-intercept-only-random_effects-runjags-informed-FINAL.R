@@ -14,11 +14,9 @@ library(scales)
 memory.limit(8000)
 
 source("src/openGraphSaveGraph.R")
+source("src/extract_samples.R")
 
 source("src/clean-data.R")
-
-graphics.off()
-fileNameRoot="output/censored_regression_nonrandom" # for constructing output filenames
 
 #------------------------------------------------------------------------------
 # THE MODEL.
@@ -141,7 +139,7 @@ if (include_predictions) {
 # INTIALIZE THE CHAINS.
 #get maximum likelihood estimates of model parameters
 coefs = ddply(df, ~ visandsign, function(df) {
-        m = with(df, gamlss(Surv(censored_jnd, not_censored) ~ r * approach_value, family=cens(LOGNO)))
+        m = gamlss(Surv(censored_jnd, not_censored) ~ r * approach_value, family=cens(LOGNO), data=df)
         c(
             sigma = exp(coef(m, "sigma")), 
             coef(m)
@@ -205,102 +203,24 @@ if ( checkConvergence ) {
 mcmcChain = as.matrix( codaSamples )
 rm("codaSamples")
 rm("jagsModel")
-thinIndex = ceiling(seq(1, nrow(mcmcChain), by=1))#length=500))
 
 # Extract chain values:
-extract_2d_vector_sample = function(variable_name, n, n_name) {
-	#extract a 2d vector sample in long-format where the row in the sample is the visandsign
-	sample = NULL
-	for (v in 1:n_visandsigns) {
-		for (i in 1:n) {
-			sdf = data.frame(v = mcmcChain[thinIndex, paste(variable_name, "[", v, ",", i,"]", sep="")])
-			names(sdf) = variable_name
-			sdf$visandsign = visandsigns[v]
-			sdf[[n_name]] = i
-			sample = rbind(sample, sdf)
-		}
-	}
-	sample$visandsign = factor(sample$visandsign, levels=visandsigns)
-	sample
-}
-extract_2d_vector_sample_wide = function(variable_name, n) {
-	#extract a 2d vector sample in wide format where the row in the sample is the visandsign
-	sample = NULL
-	for (v in 1:n_visandsigns) {
-        sdf = NULL
-		for (i in 1:n) {
-			sdf2 = data.frame(v = mcmcChain[thinIndex, paste(variable_name, "[", v, ",", i,"]", sep="")])
-			names(sdf2) = paste0(variable_name, i)
-            sdf = if (is.null(sdf)) sdf2 else cbind(sdf, sdf2)
-		}
-		sdf$visandsign = visandsigns[v]
-		sample = rbind(sample, sdf)
-	}
-	sample$visandsign = factor(sample$visandsign, levels=visandsigns)
-	sample
-}
-extract_1d_vector_sample = function(row_index, variable_name, n) {
-	sample = NULL
-	for (i in 1:n) {
-		sdf = data.frame(v = mcmcChain[thinIndex, paste(variable_name, "[", i, "]", sep="")])
-		names(sdf) = variable_name
-        sdf = cbind(row_index[i,], sdf)
-		sample = rbind(sample, sdf)
-	}
-	sample
-}
-extract_sample = function(mcmcChain, spec) {
-    #first, extract the sample into a data frame
-    variable_name = as.character(spec[[2]][[2]])
-    long_df = extract_sample_long(mcmcChain,
-        variable_name, 
-        as.character(spec[[2]][-1:-2]))
-    
-    if (is.null(long_df$..)) {
-        long_df
-    } else {
-        #if any of the columns were named "..", use it to form a wide version of the data
-        wide_df = filter(long_df, .. == 1)
-        wide_df$.. = NULL
-        wide_df[[paste0(variable_name, "1")]] = wide_df[[variable_name]]
-        wide_df[[variable_name]] = NULL
-        for (i in 1:max(long_df$..)) {
-            col_df = filter(long_df, .. == i)
-            wide_df[[paste0(variable_name, i)]] = col_df[[variable_name]]
-        }
-        wide_df
-    }   
-}
-
-extract_sample_long = function(mcmcChain, variable_name, index_names) {
-    ldply(colnames(mcmcChain), function(colname) {
-                    colname_parts = strsplit(colname,"\\,|\\]|\\[")[[1]]
-                    if (colname_parts[1] == variable_name) {	#this is one of the variables we want 
-                            indices = as.list(as.numeric(colname_parts[-1]))
-                            names(indices) = index_names
-                            values = list(mcmcChain[,colname])
-                            names(values) = variable_name
-                            data.frame(indices, values)
-                    }            
-            })
-}
-bdf = extract_sample(mcmcChain, ~ b[visandsign_number, ..]) %>%
-    mutate(visandsign = factor(visandsigns[visandsign_number])) %>%
-    select(-visandsign_number)
-bdf_m = ddply(bdf, ~ visandsign, summarize, b1=median(b1), b2=median(b2), b3=median(b3)) %>%
+bdf = extract_samples(mcmcChain, ~ b[visandsign, ..], df)
+bdf_m = bdf %>%
+    group_by(visandsign) %>%
+    summarize(b1=median(b1), b2=median(b2), b3=median(b3), b4=median(b4)) %>%
     mutate(
         vis = factor(str_sub(visandsign, end=-9)),
         sign = factor(str_sub(visandsign, start=-8))
     )
 pred_df$visandsign = factor(pred_df$visandsign_number, labels=visandsigns)
-pdfb = extract_1d_vector_sample(pred_df, "pred_y", n_pred)
+pred_df$i = 1:nrow(pred_df)
+pdfb = extract_samples(mcmcChain, ~ pred_y[i]) %>%
+    join(pred_df, by="i")
 
 #get typical mu values
-typical_mu = extract_sample(mcmcChain, ~ typical_mu[..])
-for (i in 1:length(visandsigns)) {
-    typical_mu[[visandsigns[[i]]]] = typical_mu[[paste0("typical_mu", i)]]
-    typical_mu[[paste0("typical_mu", i)]] = NULL
-}
+typical_mu = extract_samples(mcmcChain, ~ typical_mu[visandsign], df) %>%
+    dcast(... ~ visandsign, value.var="typical_mu")
 
 #differences between groups
 typical_mu$group1 = rowMeans(typical_mu[,c("scatterplotnegative","scatterplotpositive","parallelCoordinatesnegative")])
@@ -319,20 +239,18 @@ ggplot(tm_group_comp,
     geom_hline(yintercept=0, lty="dashed") +
     stat_summary(fun.data="median_hilow", alpha=.99) +
     coord_flip() 
-saveGraph("output/mu-group-comparison", "pdf")
+saveGraph("output/typical_mu-high_precision_group", "pdf")
 
 
 #tau
-taudf=extract_sample(mcmcChain, ~ tau[visandsign_number])
-taudf$visandsign = factor(visandsigns[taudf$visandsign_number])
+taudf = extract_samples(mcmcChain, ~ tau[visandsign], df)
 ggplot(taudf,
         aes(x=visandsign, y=sqrt(1/tau))) + 
     geom_violin(linetype=0, fill="skyblue") + 
     stat_summary(fun.data="median_hilow") +
     coord_flip() 
 
-utaudf=extract_sample(mcmcChain, ~ u_tau[visandsign_number])
-utaudf$visandsign = factor(visandsigns[utaudf$visandsign_number])
+utaudf = extract_samples(mcmcChain, ~ u_tau[visandsign], df)
 openGraph(7,5)
 ggplot(filter(utaudf, visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")),
         aes(x=visandsign, y=sqrt(1/u_tau))) + 
@@ -344,8 +262,7 @@ saveGraph("output/u_tau-high_precision_group", "pdf")
 
 
 #typical mu
-tmdf=extract_sample(mcmcChain, ~ typical_mu[visandsign_number])
-tmdf$visandsign = factor(visandsigns[tmdf$visandsign_number])
+tmdf = extract_samples(mcmcChain, ~ typical_mu[visandsign], df)
 tmdf$visandsign_bymean = with(tmdf, reorder(visandsign, -typical_mu, mean))
 ggplot(tmdf,
         aes(x=visandsign_bymean, y=typical_mu)) + 
@@ -500,7 +417,7 @@ ggplot(
     scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
     scale_x_continuous(breaks=seq(0.3,0.8,by=0.1)) +
     annotation_logticks(sides="l")
-saveGraph("output/final-model-log-space.pdf")
+saveGraph("output/final-model-log-space", "pdf")
     
     
 #linear-space fit lines, single plot, no data
@@ -538,39 +455,6 @@ ggplot(rdf[rdf$r==plot_r,], aes(x=visandsign_bymean, y=logy)) +
     theme_bw()
 grid.edit("geom_point.points", grep = TRUE, gp = gpar(lwd = 3))
 
-
-b0_sample_full = NULL
-for (j in 1:(n_acceptable_levels - 1)) {
-	b0_sample_full = cbind(b0_sample_full, mcmcChain[, paste("b0[", j ,"]", sep="")])
-}
-b_survey_part_sample_full = NULL
-s_survey_part_sample_full = NULL
-for (j in 1:n_survey_parts) {
-	b_survey_part_sample_full = cbind(b_survey_part_sample_full, mcmcChain[, paste("b_survey_part[", j ,"]", sep="")])
-	s_survey_part_sample_full = cbind(s_survey_part_sample_full, mcmcChain[, paste("s_survey_part[", j ,"]", sep="")])
-}
-if (include_predictions) {
-	pred_y_sample_full = NULL
-	for (j in 1:n_pred) {
-		pred_y_sample_full = cbind(pred_y_sample_full, mcmcChain[, paste("pred_y[", j ,"]", sep="")])
-	}
-}
-b_sample_full = mcmcChain[, "b"] 
-alpha_sample_full = mcmcChain[, "alpha"] 
-model_number_sample = mcmcChain[, "model_number"]
-p_model = laply(1:3, function(model_number) {
-	sum(model_number_sample == model_number) / length(model_number_sample)
-})
-
-#subset to preferred model
-best_model = which(p_model == max(p_model))
-b0_sample = b0_sample_full[model_number_sample == best_model,]
-b_survey_part_sample = b_survey_part_sample_full[model_number_sample == best_model,]
-s_survey_part_sample = s_survey_part_sample_full[model_number_sample == best_model,]
-b_sample = b_sample_full[model_number_sample == best_model]
-alpha_sample = as.matrix(alpha_sample_full[model_number_sample == best_model])
-if (include_predictions) pred_y_sample = pred_y_sample_full[model_number_sample == best_model,]
-chain_length = nrow(b0_sample)
 
 #save
 save.image(file=paste("output/censored_regression-random_effects-intercept-FINAL", 

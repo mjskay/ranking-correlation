@@ -1,0 +1,103 @@
+Auto-run JAGS
+
+Running a pilot chain...
+Calling the simulation using the parallel method...
+Following the progress of chain 1 (the program will wait for all chains to finish before continuing):
+Welcome to JAGS 3.4.0 on Sun Mar 29 12:42:31 2015
+JAGS is free software and comes with ABSOLUTELY NO WARRANTY
+Loading module: basemod: ok
+Loading module: bugs: ok
+. . Reading data file data.txt
+. Compiling model graph
+   Resolving undeclared variables
+   Allocating nodes
+   Graph Size: 58619
+. Reading parameter file inits1.txt
+. Initializing model
+. Adapting 1000
+-------------------------------------------------| 1000
+++++++++++++++++++++++++++++++++++++++++++++++++++ 100%
+Adaptation successful
+. Updating 4000
+-------------------------------------------------| 4000
+************************************************** 100%
+. . . . . . . Updating 10000
+-------------------------------------------------| 10000
+************************************************** 100%
+. . . Updating 0
+. Deleting model
+. 
+All chains have finished
+Simulation complete.  Reading coda files...
+Coda files loaded successfully
+
+Calculating the Gelman-Rubin statistic for 235 variables....
+The Gelman-Rubin statistic was above 1.05 for 1 parameter after 10000
+iterations (multi-variate psrf = 1.127).  This may indicate poor
+convergence.
+Extending the simulation to attempt to improve convergence...
+Calling the simulation using the parallel method...
+Following the progress of chain 1 (the program will wait for all chains to finish before continuing):
+Welcome to JAGS 3.4.0 on Sun Mar 29 12:50:45 2015
+JAGS is free software and comes with ABSOLUTELY NO WARRANTY
+Loading module: basemod: ok
+Loading module: bugs: ok
+. . Reading data file data.txt
+. Compiling model graph
+   Resolving undeclared variables
+   Allocating nodes
+   Graph Size: 58619
+. Reading parameter file inits1.txt
+. Initializing model
+. Adapting 1000
+-------------------------------------------------| 1000
+++++++++++++++++++++++++++++++++++++++++++++++++++ 100%
+Adaptation successful
+. NOTE: Stopping adaptation
+
+. . . . . . Updating 10000
+-------------------------------------------------| 10000
+************************************************** 100%
+. . . Updating 0
+. Deleting model
+All chains have finished
+Simulation complete.  Reading coda files...
+Coda files loaded successfully
+Calculating the Gelman-Rubin statistic for 235 variables....
+The Gelman-Rubin statistic is now below 1.05 for all parameters
+
+Calculating the necessary sample length based on the Raftery and
+Lewis's diagnostic...
+The model will need to be run for a further 59623 updates.  This will
+take approximately 34.4 minutes.
+
+Calling the simulation using the parallel method...
+Following the progress of chain 1 (the program will wait for all chains to finish before continuing):
+Welcome to JAGS 3.4.0 on Sun Mar 29 12:57:02 2015
+JAGS is free software and comes with ABSOLUTELY NO WARRANTY
+Loading module: basemod: ok
+Loading module: bugs: ok
+. . Reading data file data.txt
+. Compiling model graph
+   Resolving undeclared variables
+   Allocating nodes
+   Graph Size: 58619
+. Reading parameter file inits1.txt
+. Initializing model
+. Adapting 1000
+-------------------------------------------------| 1000
+++++++++++++++++++++++++++++++++++++++++++++++++++ 100%
+Adaptation successful
+. NOTE: Stopping adaptation
+
+. . . . . . Updating 59623
+-------------------------------------------------| 59600
+************************************************** 100%
+* 100%
+. . . Updating 0
+. Deleting model
+All chains have finished
+Simulation complete.  Reading coda files...
+Coda files loaded successfully
+Necessary sample length achieved
+Auto-run JAGS complete.

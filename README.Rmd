@@ -361,7 +361,7 @@ ggplot(censored_data, aes(
     geom_vline(xintercept=c, size=1, linetype="dashed") +
     geom_vline(data=censored_data_means, mapping=aes(xintercept=x), size=1, linetype="dashed") +
     facet_wrap(~dist, ncol=1)
-#saveGraph("output/censored-example", "pdf")
+#saveGraph("output/censoring-explanation", "pdf")
 ```    
 
 Next, let's look at some data to decide what to censor
@@ -382,7 +382,7 @@ ggplot(
         limits=c(-6, -0.2),
         labels=trans_format(function(x) 2^x, math_format(.x))) +
     facet_wrap(~visandsign)
-saveGraph("output/censor-from-above.pdf")
+saveGraph("output/censored-data-from-above", "pdf")
 
 openGraph(7.5,4)
 ggplot(
@@ -399,7 +399,7 @@ ggplot(
         limits=c(-6, -0.2),
         labels=trans_format(function(x) 2^x, math_format(.x))) +
     facet_wrap(~visandsign)
-saveGraph("output/censor-from-below.pdf")
+saveGraph("output/censored-data-from-below", "pdf")
 ```
 
 This model addresses outliers through censoring. We remove both filters used in
