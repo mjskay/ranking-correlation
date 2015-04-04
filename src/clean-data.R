@@ -1,63 +1,43 @@
-library(ggplot2)
-library(dplyr)
-library(lme4)
-library(visreg)
-library(MASS)
-library(gamlss)
+### DATA CLEANING
 
-#DATA CLEANING
+library(dplyr)
+
 
 #read data
 df = read.csv("data/master.csv")
 
-#clean up columns from original data
 df = df %>%
-    rename(r = rbase)
-
-#calculate values used to derive filtering conditions used in original paper
-df = df %>%
-    group_by(visandsign) %>%
-    summarize(p_chance = sum(jnd > .45)/length(jnd)) %>%	#proportion of jnd worse than chance
-    join(df)
-
-df = df %>%
-    group_by(visandsign, r, approach) %>%
-    summarize(
-        jnd_mad = mad(jnd),			#within-group median absolute deviation 
-        jnd_median = median(jnd)
+    #clean up columns from original data
+    rename(
+        r = rbase
     ) %>%
-    join(df)
 
-#filters used by original paper: when either is true, that data was excluded
-df$p_chance_cutoff = df$p_chance > .2	#visandsigns with > 20% observations of jnd worse than chance
-df$mad_cutoff = abs(df$jnd - df$jnd_median) > 3 * df$jnd_mad	#observations > 3 mads from the median
-
-#adjusted r (TODO: ensure properly replicating old method)
-df = df %>%
-    group_by(visandsign, r) %>%
-    summarize(jnd_mean_within_vsr = mean(jnd)) %>%
-    join(df) %>%
+    #calculate values used to derive filtering conditions used in original paper
+    group_by(visandsign) %>%
     mutate(
-        ra = r + ifelse(approach == "above", 0.5, -0.5) * jnd_mean_within_vsr
+        p_chance = sum(jnd > .45)/length(jnd),	#proportion of jnd worse than chance
+        p_chance_cutoff = p_chance > .2			#visandsigns with > 20% observations of jnd worse than chance
+    ) %>%
+    group_by(visandsign, r, approach) %>%
+    mutate(
+        #observations > 3 median-absolute deviations from the median within each group
+        mad_cutoff = abs(jnd - median(jnd)) > 3 * mad(jnd)
+    ) %>%
+    ungroup() %>%
+
+    #censorship based on being above / below ceiling/floor, and chance
+    mutate(
+        censoring_threshold = ifelse(approach == "below", 
+            pmin(r - .05, .4), 
+            pmin(.95 - r, .4)),
+        not_censored = jnd <= censoring_threshold,
+        censored_jnd = pmin(jnd, censoring_threshold)
     )
 
-#censorship based on being above / below ceiling/floor , and chance
-df = mutate(df,
-    censoring_threshold = ifelse(approach == "below", 
-                    pmin(r - .05, .4), 
-                    pmin(.95 - r, .4)),
-    not_censored = jnd <= censoring_threshold,
-    censored_jnd = pmin(jnd, censoring_threshold)
-)
-
-#use sum-to-zero contrasts for approach so that we can estimate jnd as the 
-#average of the above/below values
+#approach should be coded as sum-to-zero so that other coefficients can be 
+#interpreted as relative to the mean of both approaches. We relevel first 
+#so that "below" is assigned 1 and "above" -1 (this is just to eliminate
+#a double-negative so that the sign of the coefficient of approach is positive,
+#makes interpretation slightly simpler)
+df$approach = relevel(df$approach, "below")
 contrasts(df$approach) = contr.sum
-
-
-
-
-
-
-
-
