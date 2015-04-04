@@ -30,7 +30,7 @@ df = df %>%
         censoring_threshold = ifelse(approach == "below", 
             pmin(r - .05, .4), 
             pmin(.95 - r, .4)),
-        not_censored = jnd <= censoring_threshold,
+        censored = jnd > censoring_threshold,
         censored_jnd = pmin(jnd, censoring_threshold)
     )
 
@@ -41,3 +41,7 @@ df = df %>%
 #makes interpretation slightly simpler)
 df$approach = relevel(df$approach, "below")
 contrasts(df$approach) = contr.sum
+
+#finally, make a numeric version of the approach coded as sum-to-zero
+#(this is easier to work with than the factor in many cases)
+df$approach_value = ifelse(df$approach == "above", -1, 1)
