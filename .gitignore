@@ -6,6 +6,7 @@
 *~
 ~$*.docx
 ~$*.dotx
+model.txt
 
 #ignore RMarkdown output files on dev branch
 README.md
