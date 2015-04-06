@@ -177,12 +177,13 @@ if ( checkConvergence ) {
 # Convert coda-object codaSamples to matrix object for easier handling.
 # But note that this concatenates the different chains into one long chain.
 # Result is mcmcChain[ stepIdx , paramIdx ]
-mcmcChain = as.matrix( codaSamples )
+mcmcChain = as.matrix(codaSamples) %>%
+    apply_prototypes(df)
 rm("codaSamples")
 rm("jagsModel")
 
 # Extract chain values:
-bdf = extract_samples(mcmcChain, ~ b[visandsign, ..], df)
+bdf = extract_samples(mcmcChain, b[visandsign, ..])
 bdf_m = bdf %>%
     group_by(visandsign) %>%
     summarise(b1=median(b1), b2=median(b2), b3=median(b3), b4=median(b4)) %>%
@@ -190,12 +191,11 @@ bdf_m = bdf %>%
         vis = factor(str_sub(visandsign, end=-9)),
         sign = factor(str_sub(visandsign, start=-8))
     )
-pdfb = extract_samples(mcmcChain, ~ pred_y[i]) %>%
+pdfb = extract_samples(mcmcChain, pred_y[i]) %>%
     join(pred_df, by="i")
 
 #get typical mu values
-typical_mu = extract_samples(mcmcChain, ~ typical_mu[visandsign], df) %>%
-    spread(visandsign, typical_mu)
+typical_mu = extract_samples(mcmcChain, typical_mu[visandsign] | visandsign)
 
 #differences between groups
 typical_mu$group1 = rowMeans(typical_mu[,c("scatterplotnegative","scatterplotpositive","parallelCoordinatesnegative")])
@@ -218,14 +218,14 @@ saveGraph("output/typical_mu-high_precision_group", "pdf")
 
 
 #tau
-taudf = extract_samples(mcmcChain, ~ tau[visandsign], df)
+taudf = extract_samples(mcmcChain, tau[visandsign])
 ggplot(taudf,
         aes(x=visandsign, y=sqrt(1/tau))) + 
     geom_violin(linetype=0, fill="skyblue") + 
     stat_summary(fun.data="median_hilow") +
     coord_flip() 
 
-utaudf = extract_samples(mcmcChain, ~ u_tau[visandsign], df)
+utaudf = extract_samples(mcmcChain, u_tau[visandsign])
 openGraph(7,5)
 ggplot(filter(utaudf, visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")),
         aes(x=visandsign, y=sqrt(1/u_tau))) + 
@@ -248,7 +248,7 @@ utaudf %>%
 
 
 #typical mu
-tmdf = extract_samples(mcmcChain, ~ typical_mu[visandsign], df)
+tmdf = extract_samples(mcmcChain, typical_mu[visandsign])
 tmdf$visandsign_bymean = with(tmdf, reorder(visandsign, -typical_mu, mean))
 ggplot(tmdf,
         aes(x=visandsign_bymean, y=typical_mu)) + 
