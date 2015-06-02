@@ -11,7 +11,7 @@ library(plyr)
 library(dplyr)
 library(tidyr)
 library(tidybayes)
-library(metajags)
+library(metabayes)
 library(stringr)
 library(scales)
 
@@ -27,7 +27,7 @@ include_predictions = TRUE
 final_model = FALSE
 include_typical = TRUE
 
-model = metajags_model({
+model = metajags({
 	#MODEL
 	#core model
 	for (i in 1:n) {
@@ -144,12 +144,12 @@ if (include_predictions) parameters = c(parameters, "pred_y")
 if (include_typical) parameters = c(parameters, "typical_r", "typical_mu") 
 
 if (!final_model) {
-    jagsModel = run.jags(model$code, data=data_list, monitor=parameters, initlist=inits_list, 
+    jagsModel = run.jags(code(model), data=data_list, monitor=parameters, initlist=inits_list, 
         method="parallel")
 } else {
 #    jagsModel = autorun.jags("model.txt", data=data_list, monitor=parameters, initlist=inits_list,
 #        method="parallel", thin.sample=TRUE)    
-    jagsModel = run.jags(model$code, data=data_list, monitor=parameters, initlist=inits_list,
+    jagsModel = run.jags(code(model), data=data_list, monitor=parameters, initlist=inits_list,
 	    adapt=5000, burnin = 100000, sample = 10000, thin=10,
         method="parallel")
 }
