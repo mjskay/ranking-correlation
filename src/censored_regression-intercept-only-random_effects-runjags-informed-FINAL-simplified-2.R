@@ -89,7 +89,6 @@ model = metajags({
 #that all participants were assigned to only one visandsign
 participant_visandsign = df %>%
     group_by(participant) %>%
-    arrange(participant) %>%		#put in order so that indices line up in JAGS
     slice(1) %$%
     as.numeric(visandsign)
 
@@ -259,30 +258,15 @@ ggplot(tmdf,
         coord_flip() +
         theme_bw()
 
-#generate pairwise comparisons of adjacent conditions
-tmdf_comparison = filter(tmdf, visandsign != "radarnegative") %>%
-    arrange(visandsign_bymean)
-names(tmdf_comparison) = paste0(names(tmdf_comparison), "1")
-tmdf_2 = filter(tmdf, visandsign != "scatterplotpositive") %>%
-    arrange(visandsign_bymean)
-names(tmdf_2) = paste0(names(tmdf_2), "2")
-tmdf_comparison = cbind(tmdf_comparison, tmdf_2) %>%
-    mutate(
-        comparison = factor(paste0(visandsign_bymean1, " - ", visandsign_bymean2)),
-        typical_mu_difference = typical_mu2 - typical_mu1
-    )
-tmdf_comparison$comparison = reorder(tmdf_comparison$comparison, as.numeric(tmdf_comparison$visandsign_bymean1))
-
-ggplot(tmdf_comparison,
-        aes(x=comparison, y=typical_mu_difference)) + 
-    geom_violin(linetype=0, fill="skyblue") + 
-    geom_hline(yintercept=0, lty="dashed") +
-    stat_summary(fun.data="median_hilow") +
-#    geom_segment(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, xend=visandsign_bymean, y=tm_lower, yend=tm_upper), size=1.25) +
-#    geom_point(data=tmdf_intervals, mapping=aes(x=visandsign_bymean, y=tm_mean), size=3, shape=3) +
-#        ylim(-3.5, 0) +
-    coord_flip()
-
+#ordered comparisons of adjacent conditions
+extract_samples(mcmcChain, typical_mu[visandsign]) %>%
+    mutate(visandsign = reorder(visandsign, typical_mu, mean)) %>%
+    compare_levels(typical_mu, by=visandsign, comparison=ordered) %>%
+    ggplot(aes(x=visandsign, y=typical_mu)) + 
+        geom_violin(linetype=0, fill="skyblue") + 
+        geom_hline(yintercept=0, lty="dashed") +
+        stat_summary(fun.data="median_hilow") +
+        coord_flip()
 
     
 

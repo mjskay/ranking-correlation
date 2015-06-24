@@ -6,11 +6,13 @@ _Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(cache=TRUE)           #default code chunk options
-panderOptions("table.split.table", Inf)     #don't split wide tables in output
-panderOptions("table.style", "rmarkdown")   #table style that's supported by github
+pander::panderOptions("table.split.table", Inf)     #don't split wide tables in output
+pander::panderOptions("table.style", "rmarkdown")   #table style that's supported by github
+memory.limit(4000)
 ```
 
 ```{r libraries, message=FALSE, warning=FALSE, cache=FALSE}
+library(MASS)           #load first to prevent select() from masking dplyr::select()
 library(car)            #bcPower
 library(ggplot2)
 library(scales)
@@ -194,13 +196,13 @@ weber_data_df = filter(df, visandsign == "scatterplotpositive", !mad_cutoff)
 
 weber_df = weber_data_df %>%
     group_by(approach, r) %>%
-    summarize(jnd = mean(jnd))
-
-adjusted_weber_df = weber_df %>%
+    summarize(jnd = mean(jnd)) %>%
     group_by(r) %>%
-    summarize(mean.jnd=mean(jnd)) %>%
-    join(weber_df) %>%
-    mutate(r_A = r + ifelse(approach == "above", 0.5, -0.5) * mean.jnd) 
+    mutate(
+        mean.jnd.within.r = mean(jnd),
+        r_A = r + ifelse(approach == "above", 0.5, -0.5) * mean.jnd.within.r
+    ) 
+
 
 #openGraph(6,5)    
 ggplot(
@@ -332,6 +334,28 @@ pander(AIC(m.linear, m.loglinear))
 ```
 
 
+## Note on linear model with non-constant variance
+
+Note that we could fit a linear model with variance proportional to r. This addresses the
+problem of scale-location variance but does not address the problem of skewed residuals
+(as the log fit does), again suggesting the log fit is a better description of the data:  
+
+```{r linear_model_v}
+m.linear_v = gamlss(jnd ~ r * visandsign * approach,
+    sigma.formula = ~ r * visandsign,
+    data=filter(df, !mad_cutoff & !p_chance_cutoff)
+    )
+plot(m.linear_v)
+```
+
+```{r linear_vs_loglinear_AIC, eval=FALSE}
+AIC(m.linear, m.linear_v, m.loglinear)
+```
+
+```{r linear_vs_loglinear_AIC_2, echo=FALSE, results='asis'}
+pander(AIC(m.linear, m.loglinear))
+```
+
 
 # Log-linear model with censoring
 First let's explain censoring. 
@@ -452,14 +476,14 @@ model_fits = ldply(c("uncensored", "censored"), function(m) {
 
 openGraph(7.5,4)
 ggplot(
-        filter(df, visandsign %in% c("linepositive","parallelCoordinatespositive")),
+        filter(df, visandsign %in% c("linepositive","donutpositive")),
         aes(x=r, 
             y=log2(jnd),
     )) + 
     geom_point(alpha=.25, size=3, color="#999999") + 
     geom_hline(yintercept=log2(.45), lty="dashed") + 
 #    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
-    geom_line(data=filter(model_fits, visandsign %in% c("linepositive","parallelCoordinatespositive")), mapping=aes(y=prediction/log(2), color=model)) + 
+    geom_line(data=filter(model_fits, visandsign %in% c("linepositive","donutpositive")), mapping=aes(y=prediction/log(2), color=model)) + 
     annotation_logticks(sides="l") +
     scale_y_continuous(
         limits=c(-6, -0.2),
@@ -467,13 +491,53 @@ ggplot(
     facet_wrap(~visandsign)
 saveGraph("output/censor-bias", "pdf")
 
+
+#compare fit and error of censored and non-censored regression on something near chance
+#have to use survreg here because gamlss won't give se for unobserved approach_value == 0,
+#the resulting model is the same.
+censored_example_vis = "linenegative"
+m.censored_se = survreg(formula = Surv(censored_jnd, not_censored) ~ r * approach_value, 
+    dist = "lognormal",  
+    data = filter(df, visandsign == censored_example_vis)) 
+
+m.uncensored_se = lm(formula = log(jnd) ~ r * approach_value,   
+    data = filter(df, visandsign == censored_example_vis))
+    
+newdata = data.frame(r=3:8/10, approach_value=0)
+censored_pred = predict(m.censored_se, newdata=newdata, se.fit=TRUE) %>%
+    data.frame(newdata, model="censored") %>%
+    mutate(fit = log(fit))
+uncensored_pred = predict(m.uncensored_se, newdata=newdata, se.fit=TRUE) %>%
+    data.frame(newdata, model="uncensored")
+
+rbind.fill(censored_pred, uncensored_pred) %>%
+    mutate(
+        uc = fit + se.fit*qnorm(.975),
+        lc = fit - se.fit*qnorm(.975)
+    ) %>%
+    ggplot(
+        aes(x=r, 
+            y=fit / log(2),
+            color=model
+    )) + 
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    geom_ribbon(mapping=aes(ymin=lc/log(2), ymax=uc/log(2), fill=model), color=NA, alpha=0.25) + 
+    geom_line() + 
+    annotation_logticks(sides="l") +
+    scale_y_continuous(
+        limits=c(-6, -0.2),
+        labels=trans_format(function(x) 2^x, math_format(.x)))
+
+
 ```
 
 ```{r censored_model_plot, include=FALSE, cache=FALSE}
 #openGraph(7,5)
 plot.residuals(m.censored, log_x=TRUE)
 #saveGraph("output/residuals-censored", "pdf")
-```
+```    
+
+
 
 # Bayesian log-linear model with censoring
 
