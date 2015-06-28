@@ -26,7 +26,7 @@ source("src/clean-data.R")
 # THE MODEL.
 include_predictions = TRUE
 final_model = FALSE
-include_typical = TRUE
+include_typical = FALSE
 
 model = metajags({
 	#MODEL
@@ -182,251 +182,166 @@ mcmcChain = as.matrix(codaSamples) %>%
 rm("codaSamples")
 rm("jagsModel")
 
-# Extract chain values:
-bdf = extract_samples(mcmcChain, b[visandsign, ..])
-bdf_m = bdf %>%
-    group_by(visandsign) %>%
-    summarise(b1=median(b1), b2=median(b2), b3=median(b3), b4=median(b4)) %>%
-    mutate(
+#extract samples of linear model coefficients
+b_samples = extract_samples(mcmcChain, b[visandsign, ..]) %>%
+    mutate( #split vis and sign apart so we can apply aesthetics to them separately
         vis = factor(str_sub(visandsign, end=-9)),
         sign = factor(str_sub(visandsign, start=-8))
     )
-pdfb = extract_samples(mcmcChain, pred_y[i]) %>%
-    join(pred_df, by="i")
+b_medians = b_samples %>%
+    group_by(visandsign, vis, sign) %>%	#vis, sign is redundant here but we want to keep them around
+    summarise(b1 = median(b1), b2 = median(b2), b3 = median(b3), b4 = median(b4)) %>%
 
-#get typical mu values
-typical_mu = extract_samples(mcmcChain, typical_mu[visandsign] | visandsign)
+#extract samples for variables that were indexed by visandsign
+samples_by_visandsign = extract_samples(mcmcChain, cbind(tau, u_tau, typical_mu)[visandsign])
 
-#differences between groups
-typical_mu$group1 = rowMeans(typical_mu[,c("scatterplotnegative","scatterplotpositive","parallelCoordinatesnegative")])
-typical_mu$group2 = rowMeans(typical_mu[,c("ordered_linepositive","donutnegative","stackedbarnegative","ordered_linenegative","stackedlinenegative","stackedareanegative")])
-typical_mu$group3 = rowMeans(typical_mu[,c("parallelCoordinatespositive","radarpositive","linepositive")])
-typical_mu$group4 = rowMeans(typical_mu[,c("donutpositive", "linenegative", "radarnegative", "stackedareapositive", "stackedbarpositive", "stackedlinepositive")])
-tm_group_comp = rbind(
-    data.frame(comparison="2-1", difference=with(typical_mu, group2 - group1)),
-    data.frame(comparison="3-2", difference=with(typical_mu, group3 - group2)),
-    data.frame(comparison="4-3", difference=with(typical_mu, group4 - group3))
-)
+#differences in typical_mu between partialling-ranked groups of visandsigns
 openGraph(5,5)
-ggplot(tm_group_comp,
-        aes(x=comparison, y=difference/log(2))) + 
-    geom_violin(linetype=0, fill="skyblue") + 
-    geom_hline(yintercept=0, lty="dashed") +
-    stat_summary(fun.data="median_hilow", alpha=.99) +
-    coord_flip() 
-saveGraph("output/typical_mu-high_precision_group", "pdf")
+extract_samples(mcmcChain, typical_mu[visandsign] | visandsign) %>%
+    mutate(     #group by partial ranking
+        group1 = rowMeans(cbind(scatterplotnegative, scatterplotpositive, parallelCoordinatesnegative)),
+        group2 = rowMeans(cbind(ordered_linepositive, donutnegative, stackedbarnegative, ordered_linenegative, stackedlinenegative, stackedareanegative)),
+        group3 = rowMeans(cbind(parallelCoordinatespositive, radarpositive, linepositive)),
+        group4 = rowMeans(cbind(donutpositive, linenegative, radarnegative, stackedareapositive, stackedbarpositive, stackedlinepositive))
+    ) %>%
+    with(rbind( #get differences between groups
+        data.frame(comparison = "2-1", difference = group2 - group1),
+        data.frame(comparison = "3-2", difference = group3 - group2),
+        data.frame(comparison = "4-3", difference = group4 - group3)
+    )) %>%
+    ggraindrop(aes(x=comparison, y=difference/log(2))) + 
+        geom_hline(y=0, lty="dashed")
+saveGraph("output/typical_mu-group_differences", "pdf")
 
 
 #tau
-taudf = extract_samples(mcmcChain, tau[visandsign])
-ggplot(taudf,
-        aes(x=visandsign, y=sqrt(1/tau))) + 
-    geom_violin(linetype=0, fill="skyblue") + 
-    stat_summary(fun.data="median_hilow") +
-    coord_flip() 
+samples_by_visandsign %>%
+    ggraindrop(aes(x=visandsign, y=sqrt(1/tau)))
 
-utaudf = extract_samples(mcmcChain, u_tau[visandsign])
+#participant tau for high-performing visandsigns
 openGraph(7,5)
-ggplot(filter(utaudf, visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")),
-        aes(x=visandsign, y=sqrt(1/u_tau))) + 
-    geom_violin(linetype=0, fill="skyblue") + 
-    stat_summary(fun.data="median_hilow", alpha=.99) +
-    coord_flip() 
+samples_by_visandsign %>%
+    filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
+    ggraindrop(aes(x=visandsign, y=sqrt(1/u_tau)))
 saveGraph("output/u_tau-high_precision_group", "pdf")
-
-#differences between conditions
-utaudf %>% 
+#differences between visandsigns
+samples_by_visandsign %>% 
     filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
     mutate(sd=sqrt(1/u_tau)) %>%
     compare_levels(sd, by=visandsign) %>% 
-    ggplot(aes(x=visandsign, y=sd)) + 
-        geom_violin(linetype=0, fill="skyblue") + 
-        geom_hline(y=0, linetype="dashed") +
-        stat_summary(fun.data="median_hilow", alpha=.99) +
-        coord_flip()
-
-
+    ggraindrop(aes(x=visandsign, y=sd)) + 
+        geom_hline(y=0, linetype="dashed")
 
 #typical mu
-tmdf = extract_samples(mcmcChain, typical_mu[visandsign])
-tmdf$visandsign_bymean = with(tmdf, reorder(visandsign, -typical_mu, mean))
-ggplot(tmdf,
-        aes(x=visandsign_bymean, y=typical_mu)) + 
-        geom_violin(linetype=0, fill="skyblue") + 
-        geom_hline(yintercept=log(.45), lty="dashed") +
-        stat_summary(fun.data="median_hilow") +
-#        ylim(-3.5, 0) +
-        coord_flip() +
-        theme_bw()
-
-#ordered comparisons of adjacent conditions
-extract_samples(mcmcChain, typical_mu[visandsign]) %>%
-    mutate(visandsign = reorder(visandsign, typical_mu, mean)) %>%
+typical_mu_samples = extract_samples(mcmcChain, typical_mu[visandsign]) %>%
+    mutate(visandsign = reorder(visandsign, typical_mu, mean))
+#estimated typical_mu in each visandsign
+typical_mu_samples %>% 
+    ggraindrop(aes(x=visandsign, y=typical_mu)) +  
+        geom_hline(y=log(.45), lty="dashed")
+#comparisons of typical_mu in each visandsign by order of increasing typical_mu
+typical_mu_samples %>%
     compare_levels(typical_mu, by=visandsign, comparison=ordered) %>%
-    ggplot(aes(x=visandsign, y=typical_mu)) + 
-        geom_violin(linetype=0, fill="skyblue") + 
-        geom_hline(yintercept=0, lty="dashed") +
-        stat_summary(fun.data="median_hilow") +
-        coord_flip()
+    ggraindrop(aes(x=visandsign, y=typical_mu)) +  
+        geom_hline(y=0, lty="dashed")
 
     
+#log-space fit lines, with data and censoring indicated
+df %>%
+    ggplot(aes(x=r, y=log(jnd),
+            color=not_censored, group=NA)) + 
+        geom_point(alpha=.1) + 
+        geom_hline(yintercept=log(.45), lty="dashed") + 
+        stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
+        stat_function(fun=function(x) log(x), lty="dashed", color="black") + 
+        geom_abline(data=b_medians, mapping=aes(intercept=b1, slope=b2)) +
+        facet_wrap(~visandsign)
 
-#log-space model posteriors
-ggplot(
-        df,
-#        df,
-        aes(x=r, 
-            y=log(jnd),
-            color=not_censored,
-            group=NA
-#            color=p_chance_cutoff 
-#            color=jnd > .4 | jnd > .95 - r
-#            color=approach
-            )) + 
-    geom_point(alpha=.1) + 
-    geom_hline(yintercept=log(.45), lty="dashed") + 
-    stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
-    stat_function(fun=function(x) log(x), lty="dashed", color="black") + 
-    geom_abline(data=bdf_m, mapping=aes(intercept=b1, slope=b2)) +
-#    stat_function(fun=function(x) log(.95 - x), lty="dashed", color="black") + 
-    #    stat_smooth(method=rq, se=FALSE) +  
-    stat_smooth(method=lm) + 
-    facet_wrap(~visandsign)
+#log-space posterior predictions
+predictions = extract_samples(mcmcChain, pred_y[i]) %>%
+    join(pred_df, by="i")
+predictions %>%
+    ggplot(aes(x=r, y=log(pred_y))) + 
+    	geom_bin2d(breaks=list(
+    			x=seq(0.25, .85, by=.1), 
+    			y=seq(min(log(predictions$pred_y)), max(log(predictions$pred_y)), length=50)
+    		), mapping=aes(alpha=..density.., fill=1)) +
+        geom_point(data=df, aes(x=r, y=log(jnd)), alpha=.1) + 
+        geom_hline(yintercept=log(.45), lty="dashed") +  
+        stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
+        stat_function(fun=function(x) log(x), lty="dashed", color="black") + 
+        geom_abline(data=b_medians, mapping=aes(intercept=b1, slope=b2), color="red") +
+        facet_wrap(~visandsign)
 
-
-#log-space prediction posteriors
-ggplot(
-        pdfb,
-#        df,
-        aes(x=r, 
-            y=log(pred_y)
-#            color=p_chance_cutoff 
-#            color=jnd > .4 | jnd > .95 - r
-#            color=approach
-        )) + 
-	geom_bin2d(breaks=list(
-			x=seq(0.25, .85, by=.1), 
-			y=seq(min(log(pdfb$pred_y)), max(log(pdfb$pred_y)), length=50)
-		), mapping=aes(alpha=..density.., fill=1)) +
-#    geom_point(alpha=.1) + 
-    geom_hline(yintercept=log(.45), lty="dashed") + 
-    geom_hline(yintercept=log(.40), lty="dashed") + 
-    stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
-    geom_abline(data=bdf_m, mapping=aes(intercept=b1, slope=b2), color="blue") +
-#    stat_function(fun=function(x) log(.95 - x), lty="dashed", color="black") + 
-    #    stat_smooth(method=rq, se=FALSE) +  
-#    stat_smooth(method=lm) + 
-    geom_point(data=df, aes(x=r, y=log(jnd)), alpha=.1) + 
-    facet_wrap(~visandsign)
-
-
-
-
-#log-space model posteriors
-pred_r_step = .1/8
+# generate predicted log(mu) for a set of values of r
 pred_r_min = .3
 pred_r_max = .8
-
-rdf = ldply(seq(pred_r_min, pred_r_max, pred_r_step), function(r) {
-        within(bdf, {
+pred_r_step = .1/8
+mu_by_r = ldply(seq(pred_r_min, pred_r_max, pred_r_step), function(r) {
+        within(b_samples, {
             r <- r
-            logy <- b1 + b2*r
+            log_mu <- b1 + b2*r
         })
     }) %>%
-    select(-b3, -b4) %>%	#don't need b3 / b4 for this
-    mutate(
-        vis = factor(str_sub(visandsign, end=-9)),
-        sign = factor(str_sub(visandsign, start=-8))
-        )
-rdf_m = rdf %>% 
+    select(-b3, -b4)    #don't need b3 / b4 for this
+mu_median_by_r = mu_by_r %>% 
     group_by(visandsign, r) %>%
-    summarise(logy=mean(logy))
+    summarise(log_mu=mean(log_mu))
 
-
-ggplot(
-        rdf,
-#        df,
-        aes(x=r, 
-            y=logy,
-#            color=p_chance_cutoff 
-#            color=jnd > .4 | jnd > .95 - r
-#            color=approach
-        )) + 
-	geom_bin2d(breaks=list(
+#log-space fit lines with posterior density of mu, facetted, with data and censoring indicated
+mu_by_r %>%
+    ggplot(aes(x=r, y=log_mu)) + 
+    	geom_bin2d(breaks=list(
 			x=seq(pred_r_min - pred_r_step/2, pred_r_max + pred_r_step/2, pred_r_step), 
-			y=seq(min(rdf$logy), max(rdf$logy), length=100)
+			y=seq(min(mu_by_r$log_mu), max(mu_by_r$log_mu), length=100)
 		), mapping=aes(alpha=..density.., fill=1)) +
-#    geom_point(alpha=.1) + 
-    geom_hline(yintercept=log(.45), lty="dashed") + 
-    geom_hline(yintercept=log(.40), lty="dashed") + 
-    stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
-    geom_abline(data=bdf_m, mapping=aes(intercept=b1, slope=b2), color="blue") +
-#    stat_function(fun=function(x) log(.95 - x), lty="dashed", color="black") + 
-    #    stat_smooth(method=rq, se=FALSE) +  
-#    stat_smooth(method=lm) + 
-    geom_point(data=df, mapping=aes(x=r, y=log(jnd), color=not_censored), alpha=.1) + 
-    facet_wrap(~visandsign)
+        geom_hline(yintercept=log(.45), lty="dashed") + 
+        stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
+        stat_function(fun=function(x) log(x), lty="dashed", color="black") + 
+        geom_abline(data=b_medians, mapping=aes(intercept=b1, slope=b2), color="blue") +
+        geom_point(data=df, aes(x=r, y=log(jnd), color=not_censored), alpha=.1) + 
+        facet_wrap(~visandsign)
 
-
-#log-space fit lines, single plot, no data
+#log-space fit lines with posterior density of mu, single plot, no data
 openGraph(9, 5.5)
-ggplot(
-        rdf,
-        aes(x=r, 
-            y=logy/log(2),
-            group=visandsign
-        )) + 
-	geom_bin2d(breaks=list(
+mu_by_r %>%
+    ggplot(aes(x=r, y=log_mu/log(2), group=visandsign)) + 
+    	geom_bin2d(breaks=list(
 			x=seq(pred_r_min - pred_r_step/2, pred_r_max + pred_r_step/2, pred_r_step), 
-			y=seq(min(rdf$logy/log(2)), max(rdf$logy/log(2)), length=150)
+			y=seq(min(mu_by_r$log_mu/log(2)), max(mu_by_r$log_mu/log(2)), length=150)
 		), mapping=aes(alpha=..density.., fill=vis, color=NULL)) +
-    geom_abline(data=bdf_m, mapping=aes(intercept=b1/log(2), slope=b2/log(2), color=vis, linetype=sign), size=1) + 
-    geom_text(data=bdf_m, mapping=aes(y=I(b1/log(2) + .9 * b2/log(2)), x=.9, color=vis, label=visandsign)) +
-    geom_hline(yintercept=log2(.45), lty="dashed") + 
-    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
-    scale_alpha_continuous(range=c(0.01,0.6)) + 
-    scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
-    scale_x_continuous(breaks=seq(0.3,0.8,by=0.1)) +
-    annotation_logticks(sides="l")
+        geom_abline(data=b_medians, mapping=aes(intercept=b1/log(2), slope=b2/log(2), color=vis, linetype=sign), size=1) + 
+        geom_text(data=b_medians, mapping=aes(y=I(b1/log(2) + .9 * b2/log(2)), x=.9, color=vis, label=visandsign)) +
+        geom_hline(yintercept=log2(.45), lty="dashed") + 
+        scale_alpha_continuous(range=c(0.01,0.6)) + 
+        scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
+        scale_x_continuous(breaks=seq(0.3,0.8,by=0.1)) +
+        annotation_logticks(sides="l")
 saveGraph("output/final-model-log-space", "pdf")
-    
-    
-#linear-space fit lines, single plot, no data
-ggplot(
-        rdf,
-        aes(x=r, 
-            y=exp(logy),
-            color=visandsign
-        )) + 
-	geom_bin2d(breaks=list(
+        
+#linear-space fit lines with posterior density of mu, single plot, no data
+mu_by_r %>%
+    ggplot(aes(x=r, y=exp(log_mu), color=visandsign)) + 
+    	geom_bin2d(breaks=list(
 			x=seq(pred_r_min - pred_r_step/2, pred_r_max + pred_r_step/2, pred_r_step), 
-			y=seq(exp(min(rdf$logy)), exp(max(rdf$logy)), length=200)
+			y=seq(exp(min(mu_by_r$log_mu)), exp(max(mu_by_r$log_mu)), length=200)
 		), mapping=aes(alpha=..density.., fill=visandsign, color=NULL)) +
-    scale_alpha_continuous(range=c(0.05,1)) + 
-    geom_line(data=rdf_m, aes(x=r, y=exp(logy), color=visandsign), size=1) +  
-    geom_hline(yintercept=.45, lty="dashed") + 
-    geom_abline(slope=-1, intercept=1, lty="dashed") +
-    ylim(0, .75)
+        scale_alpha_continuous(range=c(0.05,1)) + 
+        geom_line(data=mu_median_by_r, aes(x=r, y=exp(log_mu), color=visandsign), size=1) +  
+        geom_hline(yintercept=.45, lty="dashed") + 
+        geom_abline(slope=-1, intercept=1, lty="dashed") +
+        ylim(0, .75)
 
+#mean jnd (log space) at a particular r value for each visandsign
+plot_r = .55
+mu_by_r %>%
+    mutate(visandsign = reorder(visandsign, -log_mu, mean)) %>%
+    filter(r == plot_r) %>%
+    ggraindrop(aes(x=visandsign, y=log_mu)) + 
+        geom_hline(y = log(.45), lty="dashed")
 
-#mean jnd (log space) for a particular r value
-plot_r = .8
-rdf$visandsign_bymean = with(rdf, reorder(visandsign, -logy, mean))
-
-rdf_intervals = ddply(rdf[rdf$r==plot_r,], ~ visandsign_bymean, summarize, 
-    logy_mean=mean(logy), logy_lower=quantile(logy,.025), logy_upper=quantile(logy,.975))
-
-ggplot(rdf[rdf$r==plot_r,], aes(x=visandsign_bymean, y=logy)) + 
-    geom_violin(linetype=0, fill="skyblue") + 
-    geom_hline(yintercept=log(.45), lty="dashed") +
-    geom_segment(data=rdf_intervals, mapping=aes(x=visandsign_bymean, xend=visandsign_bymean, y=logy_lower, yend=logy_upper), size=1.25) +
-    geom_point(data=rdf_intervals, mapping=aes(x=visandsign_bymean, y=logy_mean), size=3, shape=3) +
-    ylim(-3.5, 0) +
-    coord_flip() +
-    theme_bw()
-grid.edit("geom_point.points", grep = TRUE, gp = gpar(lwd = 3))
-
-
+    
+    
 #save
 save.image(file=paste("output/censored_regression-random_effects-intercept-FINAL", 
 				(if (final_model) "final" else "not_final"),
