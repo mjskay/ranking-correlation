@@ -1,3 +1,4 @@
+library(MASS)
 library(coda)
 library(rjags)
 library(runjags)
@@ -233,14 +234,15 @@ ggplot(filter(utaudf, visandsign %in% c("scatterplotpositive","scatterplotnegati
     coord_flip() 
 saveGraph("output/u_tau-high_precision_group", "pdf")
 
-#differences between scatter plot and parallel coordinates
-utaudf %>%
-    mutate(sd=sqrt(1/u_tau)) %>% 
+#differences between conditions
+utaudf %>% 
+    filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
+    mutate(sd=sqrt(1/u_tau)) %>%
     select(-u_tau) %>%
-    spread(visandsign, sd) %>%
-    mutate(ratio=scatterplotpositive / parallelCoordinatesnegative) %>%
-    ggplot(aes(x=1, y=ratio)) + 
+    compare_levels(sd, by=visandsign) %>% 
+    ggplot(aes(x=visandsign, y=sd)) + 
         geom_violin(linetype=0, fill="skyblue") + 
+        geom_hline(y=0, linetype="dashed") +
         stat_summary(fun.data="median_hilow", alpha=.99) +
         coord_flip()
 

@@ -1,0 +1,38 @@
+We thank the reviewers for their positive comments about the submission and for their detailed, thoughtful feedback. We have incorporated that feedback into the paper as follows:
+
+
+--------
+1. We have added more detail describing Harrison et al.’s paper to better scaffold the unfamiliar reader, including: a brief description of the staircase procedure in Section 2.1, a description of the approach correction in the caption of Fig. 1 with a reference to the Section 3 describing it in more detail, and a brief description of how the chance boundary was derived in Section 5.
+
+
+--------
+2. Reviewers asked for more model comparison and details of why we should prefer the proposed models. Towards this end, we have added details throughout the paper, including:
+
+- Un-footnoting the Box-Cox transform in Section 4
+
+- Adding statistics comparing the skewness and kurtosis of the residuals of the models in Section 4. Because a major goal of this paper is to better describe individual variation, one of our modelling goals is to improve the shape of the residual fit, not just the mean error. Thus, we focus on these measures (along with AIC, which is asymptotically equivalent to model comparison by cross-validated MSE) when comparing models, rather than root mean-squared error.
+
+- Adding a comparison to a linear fit with variance proportional to r (similar to the weighted least-squares model suggested by R3) as a footnote in Section 4. This model also performs worse than the log-linear model in terms of AIC, residual kurtosis, and residual skewness: in particular, while it addresses non-constant variance, it does not address the residual skew that is characteristic of a logarithmic relationship.
+
+- Adding a second example in Fig. 7 of a condition with many more censored observations, showing the much larger shift in estimated JND for that condition, motivating the use of censoring. We also emphasize that that condition (and others like it) were excluded from Harrison et al.’s analysis, and can only reasonably be included in ours because of the use of censoring.
+
+
+--------
+3. Reviewers also asked for clearer takeaways for designers, and more motivation as to why we should care about this problem. To that end, we:
+
+- Added a clear design recommendation to the introduction, suggesting that in almost all cases, a scatterplot will yield the most precise estimations of correlation with low variation between individuals.
+
+- Added a section in the discussion (8.5) outlining design takeaways, with a comparison to the recommendations of Harrison et al. This section (and text added to the beginning of Section 7) also describes more clearly why we opted for a partial ranking instead of a total ranking.
+
+
+--------
+4. Reviewers asked for more discussion of the perceptual implications of our results. While we believe this is an important question, it is difficult to draw concrete conclusions about such relationships without conducting further experiments. To suggest where this future work might focus, we have added some additional discussion of where we think our results diverge most from Weber’s law to Section 8.1: specifically, at extreme values of r, as suggested by R1.
+
+
+--------
+5. With respect to describing both accuracy and precision of estimation of correlation, R3 raises the issue of giving up the link between these in the form of the x-intercept in the Weber fit (what Rensink & Baldridge [3] denote 1/b). However, it is not clear to us that this relationship is not simply a coincidence --- a possibility also discussed in Rensink & Baldridge [3]. In fact, they find that if Weber-style fits are made to individuals’ estimates (rather than an aggregate model), the estimates of b derived from the Weber model and a model of subjective estimation of correlation have a correlation of 0.0 [3]. They argue that for better-performing participants, this correlation increases substantially (to as much as 0.97 for the best 25% of participants). However, if this relationship holds across individuals, we should be able to describe both precise and imprecise observers using it (else the claim is something like, b links accuracy and precision of estimation – but only for precise observers). This breakdown in describing individual variation is concordant with our analysis suggesting that the Weber model does not describe individual variation well. Given this, and the fact that the relationship has not been evaluated for the other visualization types tested by Harrison et al., we believe that the utility of the parameter b from Weber’s law for describing both precision and accuracy is unclear and requires further investigation. Thus, it is not clear that our model sacrifices much by losing this parameter. 
+
+
+--------
+5. Finally, all reviewers made helpful suggestions for changes to typography, writing, and figures which we have incorporated where possible.
+

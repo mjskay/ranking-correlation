@@ -8,7 +8,7 @@ _Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_
 knitr::opts_chunk$set(cache=TRUE)           #default code chunk options
 pander::panderOptions("table.split.table", Inf)     #don't split wide tables in output
 pander::panderOptions("table.style", "rmarkdown")   #table style that's supported by github
-memory.limit(4000)
+memory.limit(8000)
 ```
 
 ```{r libraries, message=FALSE, warning=FALSE, cache=FALSE}
@@ -348,11 +348,11 @@ m.linear_v = gamlss(jnd ~ r * visandsign * approach,
 plot(m.linear_v)
 ```
 
-```{r linear_vs_loglinear_AIC, eval=FALSE}
+```{r linear_vs_loglinear_AIC_3, eval=FALSE}
 AIC(m.linear, m.linear_v, m.loglinear)
 ```
 
-```{r linear_vs_loglinear_AIC_2, echo=FALSE, results='asis'}
+```{r linear_vs_loglinear_AIC_4, echo=FALSE, results='asis'}
 pander(AIC(m.linear, m.loglinear))
 ```
 
@@ -455,6 +455,19 @@ m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach
 plot(m.censored)
 ```
 
+We can compare against a censored linear model:
+
+```{r censored_linear}
+m.censored_linear = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach_value,
+    sigma.formula = ~ visandsign,
+    data=df,
+    family=cens(NO)
+    )
+plot(m.censored_linear)
+AIC(m.censored,m.censored_linear)
+```
+
+
 Now let's compare to the non-censored model
 
 ```{r censored_verses_not_comparison}
@@ -486,7 +499,7 @@ ggplot(
     geom_line(data=filter(model_fits, visandsign %in% c("linepositive","donutpositive")), mapping=aes(y=prediction/log(2), color=model)) + 
     annotation_logticks(sides="l") +
     scale_y_continuous(
-        limits=c(-6, -0.2),
+        limits=c(-6, -0.1),
         labels=trans_format(function(x) 2^x, math_format(.x))) +
     facet_wrap(~visandsign)
 saveGraph("output/censor-bias", "pdf")
