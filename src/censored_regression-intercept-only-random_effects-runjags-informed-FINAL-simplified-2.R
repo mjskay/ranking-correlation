@@ -238,7 +238,6 @@ saveGraph("output/u_tau-high_precision_group", "pdf")
 utaudf %>% 
     filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
     mutate(sd=sqrt(1/u_tau)) %>%
-    select(-u_tau) %>%
     compare_levels(sd, by=visandsign) %>% 
     ggplot(aes(x=visandsign, y=sd)) + 
         geom_violin(linetype=0, fill="skyblue") + 
