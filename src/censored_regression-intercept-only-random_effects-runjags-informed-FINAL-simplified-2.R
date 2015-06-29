@@ -6,11 +6,15 @@ library(dplyr)          #filter, group_by, mutate, select, etc
 library(tidybayes)      #compose_data, apply_prototypes, extract_samples, compare_levels
 library(metabayes)      #metajags
 library(stringr)        #str_sub
-
-memory.limit(8000)
+library(scales)         #trans_format
 
 source("src/openGraphSaveGraph.R")
 
+memory.limit(8000)
+
+
+#------------------------------------------------------------------------------
+# LOAD DATA.
 source("src/clean-data.R")
 
 #------------------------------------------------------------------------------
@@ -137,15 +141,17 @@ fit = fit %>%
 
 checkConvergence = FALSE
 if ( checkConvergence ) {
-    plot(fit, vars="^b", file="output/model-params-b.pdf")
-    plot(fit, vars="^tau", file="output/model-params-tau.pdf")
-    plot(fit, vars="^u_tau", file="output/model-params-u_tau.pdf")
-    plot(fit, vars="^typ", file="output/model-params-typical_mu.pdf")
-    plot(fit, vars="^pred", file="output/model-params-pred.pdf")
+    plotfun = function(...) plot(fit, ..., layout=c(2,2), plot.type=c("trace", "ecdf", "histogram", "autocorr", "crosscorr"))
+    plotfun(vars="^b", file="output/model-params-b.pdf")
+    plotfun(vars="^tau", file="output/model-params-tau.pdf")
+    plotfun(vars="^u_tau", file="output/model-params-u_tau.pdf")
+    if (include_typical) plotfun(vars="^typ", file="output/model-params-typical_mu.pdf")
+    if (include_predictions) plotfun(vars="^pred", file="output/model-params-pred.pdf")
 
     summary(fit)
     pdf(file="output/model-autocorr.pdf")
-    autocorr.plot(as.mcmc.list(codaSamples), ask=FALSE)
+    qplot(summary(fit)[,"SSeff"], binwidth=100)
+    autocorr.plot(as.mcmc.list(fit), ask=FALSE)
     dev.off()
 }
 
@@ -157,7 +163,7 @@ b_samples = extract_samples(fit, b[visandsign, ..]) %>%
     )
 b_medians = b_samples %>%
     group_by(visandsign, vis, sign) %>%	#vis, sign is redundant here but we want to keep them around
-    summarise(b1 = median(b1), b2 = median(b2), b3 = median(b3), b4 = median(b4)) %>%
+    summarise(b1 = median(b1), b2 = median(b2), b3 = median(b3), b4 = median(b4))
 
 #extract samples for variables that were indexed by visandsign
 samples_by_visandsign = extract_samples(fit, cbind(tau, u_tau)[visandsign])
@@ -216,7 +222,7 @@ typical_mu_samples %>%
 #log-space fit lines, with data and censoring indicated
 df %>%
     ggplot(aes(x=r, y=log(jnd),
-            color=not_censored, group=NA)) + 
+            color=censored, group=NA)) + 
         geom_point(alpha=.1) + 
         geom_hline(yintercept=log(.45), lty="dashed") + 
         stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
@@ -266,7 +272,7 @@ mu_by_r %>%
         stat_function(fun=function(x) log(1 - x), lty="dashed", color="black") + 
         stat_function(fun=function(x) log(x), lty="dashed", color="black") + 
         geom_abline(data=b_medians, mapping=aes(intercept=b1, slope=b2), color="blue") +
-        geom_point(data=df, aes(x=r, y=log(jnd), color=not_censored), alpha=.1) + 
+        geom_point(data=df, aes(x=r, y=log(jnd), color=censored), alpha=.1) + 
         facet_wrap(~visandsign)
 
 #log-space fit lines with posterior density of mu, single plot, no data
@@ -278,11 +284,13 @@ mu_by_r %>%
 			y=seq(min(mu_by_r$log_mu/log(2)), max(mu_by_r$log_mu/log(2)), length=150)
 		), mapping=aes(alpha=..density.., fill=vis, color=NULL)) +
         geom_abline(data=b_medians, mapping=aes(intercept=b1/log(2), slope=b2/log(2), color=vis, linetype=sign), size=1) + 
-        geom_text(data=b_medians, mapping=aes(y=I(b1/log(2) + .9 * b2/log(2)), x=.9, color=vis, label=visandsign)) +
+        geom_text(data=b_medians, mapping=aes(y=I(b1/log(2) + .82 * b2/log(2)), x=.82, color=vis, label=visandsign), hjust=0) +
         geom_hline(yintercept=log2(.45), lty="dashed") + 
-        scale_alpha_continuous(range=c(0.01,0.6)) + 
+        scale_alpha_continuous(range=c(0.01,0.6), guide=FALSE) +
+        scale_color_discrete(guide=FALSE) +
+        scale_fill_discrete(guide=FALSE) +
         scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
-        scale_x_continuous(breaks=seq(0.3,0.8,by=0.1)) +
+        scale_x_continuous(breaks=seq(0.3,0.8,by=0.1), limits=c(0.3,1)) +
         annotation_logticks(sides="l")
 saveGraph("output/final-model-log-space", "pdf")
         
@@ -296,13 +304,12 @@ mu_by_r %>%
         scale_alpha_continuous(range=c(0.05,1)) + 
         geom_line(data=mu_median_by_r, aes(x=r, y=exp(log_mu), color=visandsign), size=1) +  
         geom_hline(yintercept=.45, lty="dashed") + 
-        geom_abline(slope=-1, intercept=1, lty="dashed") +
         ylim(0, .75)
 
 #mean jnd (log space) at a particular r value for each visandsign
 plot_r = .55
 mu_by_r %>%
-    mutate(visandsign = reorder(visandsign, -log_mu, mean)) %>%
+    mutate(visandsign = reorder(visandsign, log_mu, mean)) %>%
     filter(r == plot_r) %>%
     ggraindrop(aes(x=visandsign, y=log_mu)) + 
         geom_hline(y = log(.45), lty="dashed")
