@@ -4,9 +4,8 @@ library(dplyr)
 
 
 #read data
-df = read.csv("data/master.csv")
+df = read.csv("data/master.csv") %>%
 
-df = df %>%
     #clean up columns from original data
     rename(
         r = rbase
@@ -43,5 +42,6 @@ df$approach = relevel(df$approach, "below")
 contrasts(df$approach) = contr.sum
 
 #finally, make a numeric version of the approach coded as sum-to-zero
-#(this is easier to work with than the factor in many cases)
+#(this is easier to work with than the factor in many cases, for example
+#if we want a model we can make predictions from with approach = 0)
 df$approach_value = ifelse(df$approach == "above", -1, 1)
