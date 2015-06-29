@@ -1,20 +1,11 @@
-library(MASS)
-library(coda)
-library(rjags)
-library(runjags)
-library(survival)
-library(gamlss)
-library(gamlss.cens)
-library(ggplot2)
-library(grid)
-library(magrittr)
-library(plyr)
-library(dplyr)
-library(tidyr)
-library(tidybayes)
-library(metabayes)
-library(stringr)
-library(scales)
+library(coda)           #autocorr.plot
+library(runjags)        #run.jags
+library(ggplot2)        #ggplot, stat_..., geom_..., etc
+library(plyr)           #**ply
+library(dplyr)          #filter, group_by, mutate, select, etc
+library(tidybayes)      #compose_data, apply_prototypes, extract_samples, compare_levels
+library(metabayes)      #metajags
+library(stringr)        #str_sub
 
 memory.limit(8000)
 
@@ -24,7 +15,7 @@ source("src/clean-data.R")
 
 #------------------------------------------------------------------------------
 # THE MODEL.
-include_predictions = TRUE
+include_predictions = FALSE
 final_model = FALSE
 include_typical = FALSE
 
@@ -81,7 +72,6 @@ model = metajags({
     }
 })
 
-
 #------------------------------------------------------------------------------
 # THE DATA.
 
@@ -90,8 +80,8 @@ model = metajags({
 #that all participants were assigned to only one visandsign
 participant_visandsign = df %>%
     group_by(participant) %>%
-    slice(1) %$%
-    as.numeric(visandsign)
+    slice(1) %>%
+    with(as.numeric(visandsign))
 
 #build data list
 data_list = df %>%
@@ -104,7 +94,7 @@ data_list = df %>%
 if (include_predictions) {
     #add predictions to data list
     pred_df = expand.grid(
-        pred_visandsign=1:length(levels(df$visandsign)), 
+        pred_visandsign=1:nlevels(df$visandsign), 
         pred_r=unique(df$r))
     data_list = data_list %>% 
         compose_data(pred=pred_df)
@@ -115,75 +105,52 @@ if (include_predictions) {
 }
 
 #------------------------------------------------------------------------------
-# INTIALIZE THE CHAINS.
-#get maximum likelihood estimates of model parameters
-coefs = ddply(df, ~ visandsign, function(df) {
-        m = gamlss(Surv(censored_jnd, !censored) ~ r * approach_value, family=cens(LOGNO), data=df)
-        c(
-            sigma = exp(coef(m, "sigma")), 
-            coef(m)
-        )
-    })
-
-#y initialization should provide values for the latent variable only for observations 
-#above the censoring threshold (values below the threshold are observed data so
-#cannot be initialized here)
-y_init = with(df, ifelse(censored, jnd, NA))
-
-inits_list = list(
-	b=as.matrix(coefs[,-1:-2]),	#first two columns are visandsign and tau
-    tau=1/(coefs$sigma^2),
-    y=y_init
-)
-
-#------------------------------------------------------------------------------
 # RUN THE CHAINS
 
-parameters = c("b" , "tau", "u_tau")  # The parameter(s) to be monitored.
-if (include_predictions) parameters = c(parameters, "pred_y") 
-if (include_typical) parameters = c(parameters, "typical_r", "typical_mu") 
+#determine the parameters to be monitored in the fit
+parameters = c("b", "tau", "u_tau", 
+    if (include_predictions) "pred_y", 
+    if (include_typical) c("typical_r", "typical_mu")
+)
 
-if (!final_model) {
-    jagsModel = run.jags(code(model), data=data_list, monitor=parameters, initlist=inits_list, 
-        method="parallel")
-} else {
-#    jagsModel = autorun.jags("model.txt", data=data_list, monitor=parameters, initlist=inits_list,
-#        method="parallel", thin.sample=TRUE)    
-    jagsModel = run.jags(code(model), data=data_list, monitor=parameters, initlist=inits_list,
-	    adapt=5000, burnin = 100000, sample = 10000, thin=10,
-        method="parallel")
-}
+#fit the model
+fit = if (!final_model) {
+        run.jags(code(model), data=data_list, monitor=parameters, 
+            method="parallel")
+    } else {
+    #    autorun.jags(code(model), data=data_list, monitor=parameters,
+    #        method="parallel", thin.sample=TRUE)    
+        run.jags(code(model), data=data_list, monitor=parameters,
+    	    adapt=5000, burnin = 100000, sample = 10000, thin=10,
+            method="parallel")
+    }
 
 
 #------------------------------------------------------------------------------
 # EXAMINE THE RESULTS
 
-codaSamples = as.mcmc.list(jagsModel)
+#apply variable type prototypes from the original data so that
+#extract_samples will automatically convert variable indices based on factors
+#back to named factors with the same levels as in the original data
+fit = fit %>%
+    apply_prototypes(df)
 
 checkConvergence = FALSE
 if ( checkConvergence ) {
-    plot(jagsModel, vars="^b", file="output/model-params-b.pdf")
-    plot(jagsModel, vars="^tau", file="output/model-params-tau.pdf")
-    plot(jagsModel, vars="^u_tau", file="output/model-params-u_tau.pdf")
-    plot(jagsModel, vars="^typ", file="output/model-params-typical_mu.pdf")
-    plot(jagsModel, vars="^pred", file="output/model-params-pred.pdf")
+    plot(fit, vars="^b", file="output/model-params-b.pdf")
+    plot(fit, vars="^tau", file="output/model-params-tau.pdf")
+    plot(fit, vars="^u_tau", file="output/model-params-u_tau.pdf")
+    plot(fit, vars="^typ", file="output/model-params-typical_mu.pdf")
+    plot(fit, vars="^pred", file="output/model-params-pred.pdf")
 
-    summary(jagsModel)
+    summary(fit)
     pdf(file="output/model-autocorr.pdf")
-    autocorr.plot(codaSamples, ask=FALSE)
+    autocorr.plot(as.mcmc.list(codaSamples), ask=FALSE)
     dev.off()
 }
 
-# Convert coda-object codaSamples to matrix object for easier handling.
-# But note that this concatenates the different chains into one long chain.
-# Result is mcmcChain[ stepIdx , paramIdx ]
-mcmcChain = as.matrix(codaSamples) %>%
-    apply_prototypes(df)
-rm("codaSamples")
-rm("jagsModel")
-
 #extract samples of linear model coefficients
-b_samples = extract_samples(mcmcChain, b[visandsign, ..]) %>%
+b_samples = extract_samples(fit, b[visandsign, ..]) %>%
     mutate( #split vis and sign apart so we can apply aesthetics to them separately
         vis = factor(str_sub(visandsign, end=-9)),
         sign = factor(str_sub(visandsign, start=-8))
@@ -193,11 +160,11 @@ b_medians = b_samples %>%
     summarise(b1 = median(b1), b2 = median(b2), b3 = median(b3), b4 = median(b4)) %>%
 
 #extract samples for variables that were indexed by visandsign
-samples_by_visandsign = extract_samples(mcmcChain, cbind(tau, u_tau, typical_mu)[visandsign])
+samples_by_visandsign = extract_samples(fit, cbind(tau, u_tau)[visandsign])
 
 #differences in typical_mu between partialling-ranked groups of visandsigns
 openGraph(5,5)
-extract_samples(mcmcChain, typical_mu[visandsign] | visandsign) %>%
+extract_samples(fit, typical_mu[visandsign] | visandsign) %>%
     mutate(     #group by partial ranking
         group1 = rowMeans(cbind(scatterplotnegative, scatterplotpositive, parallelCoordinatesnegative)),
         group2 = rowMeans(cbind(ordered_linepositive, donutnegative, stackedbarnegative, ordered_linenegative, stackedlinenegative, stackedareanegative)),
@@ -233,7 +200,7 @@ samples_by_visandsign %>%
         geom_hline(y=0, linetype="dashed")
 
 #typical mu
-typical_mu_samples = extract_samples(mcmcChain, typical_mu[visandsign]) %>%
+typical_mu_samples = extract_samples(fit, typical_mu[visandsign]) %>%
     mutate(visandsign = reorder(visandsign, typical_mu, mean))
 #estimated typical_mu in each visandsign
 typical_mu_samples %>% 
@@ -258,8 +225,8 @@ df %>%
         facet_wrap(~visandsign)
 
 #log-space posterior predictions
-predictions = extract_samples(mcmcChain, pred_y[i]) %>%
-    join(pred_df, by="i")
+predictions = extract_samples(fit, pred_y[i]) %>%
+    left_join(pred_df, by="i")
 predictions %>%
     ggplot(aes(x=r, y=log(pred_y))) + 
     	geom_bin2d(breaks=list(
