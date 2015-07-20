@@ -182,27 +182,27 @@ extract_samples(fit, typical_mu[visandsign] | visandsign) %>%
         data.frame(comparison = "3-2", difference = group3 - group2),
         data.frame(comparison = "4-3", difference = group4 - group3)
     )) %>%
-    ggraindrop(aes(x=comparison, y=difference/log(2))) + 
+    ggeye(aes(x=comparison, y=difference/log(2))) + 
         geom_hline(y=0, lty="dashed")
 saveGraph("output/typical_mu-group_differences", "pdf")
 
 
 #tau
 samples_by_visandsign %>%
-    ggraindrop(aes(x=visandsign, y=sqrt(1/tau)))
+    ggeye(aes(x=visandsign, y=sqrt(1/tau)))
 
 #participant tau for high-performing visandsigns
 openGraph(7,5)
 samples_by_visandsign %>%
     filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
-    ggraindrop(aes(x=visandsign, y=sqrt(1/u_tau)))
+    ggeye(aes(x=visandsign, y=sqrt(1/u_tau)))
 saveGraph("output/u_tau-high_precision_group", "pdf")
 #differences between visandsigns
 samples_by_visandsign %>% 
     filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
     mutate(sd=sqrt(1/u_tau)) %>%
     compare_levels(sd, by=visandsign) %>% 
-    ggraindrop(aes(x=visandsign, y=sd)) + 
+    ggeye(aes(x=visandsign, y=sd)) + 
         geom_hline(y=0, linetype="dashed")
 
 #typical mu
@@ -210,12 +210,12 @@ typical_mu_samples = extract_samples(fit, typical_mu[visandsign]) %>%
     mutate(visandsign = reorder(visandsign, typical_mu, mean))
 #estimated typical_mu in each visandsign
 typical_mu_samples %>% 
-    ggraindrop(aes(x=visandsign, y=typical_mu)) +  
+    ggeye(aes(x=visandsign, y=typical_mu)) +  
         geom_hline(y=log(.45), lty="dashed")
 #comparisons of typical_mu in each visandsign by order of increasing typical_mu
 typical_mu_samples %>%
     compare_levels(typical_mu, by=visandsign, comparison=ordered) %>%
-    ggraindrop(aes(x=visandsign, y=typical_mu)) +  
+    ggeye(aes(x=visandsign, y=typical_mu)) +  
         geom_hline(y=0, lty="dashed")
 
     
@@ -311,7 +311,7 @@ plot_r = .55
 mu_by_r %>%
     mutate(visandsign = reorder(visandsign, log_mu, mean)) %>%
     filter(r == plot_r) %>%
-    ggraindrop(aes(x=visandsign, y=log_mu)) + 
+    ggeye(aes(x=visandsign, y=log_mu)) + 
         geom_hline(y = log(.45), lty="dashed")
 
     
