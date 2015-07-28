@@ -111,7 +111,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
         <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span>jnd)
     ) +<span class="st"> </span>
 <span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">size=</span><span class="dv">3</span>, <span class="dt">alpha=</span>.<span class="dv">25</span>, <span class="dt">color=</span><span class="st">&quot;#999999&quot;</span>) +<span class="st">  </span>
-<span class="st">    </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach), <span class="dt">data=</span>weber_df, <span class="dt">size=</span><span class="dv">5</span>, <span class="dt">alpha=</span>.<span class="dv">99</span>) +
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach), <span class="dt">data=</span>weber_df, <span class="dt">size=</span><span class="dv">5</span>) +
 <span class="st">    </span><span class="kw">geom_segment</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach, <span class="dt">xend=</span>r_A, <span class="dt">yend=</span>jnd), <span class="dt">data=</span>weber_df, 
         <span class="dt">size=</span><span class="dv">1</span>, <span class="dt">arrow=</span><span class="kw">arrow</span>(<span class="dt">type=</span><span class="st">&quot;closed&quot;</span>, <span class="dt">length=</span><span class="kw">unit</span>(<span class="dv">7</span>, <span class="st">&quot;point&quot;</span>))
     ) +
@@ -125,7 +125,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
         weber_df,
         <span class="kw">aes</span>(<span class="dt">x=</span>r_A, <span class="dt">y=</span>jnd)
     ) +<span class="st"> </span>
-<span class="st">    </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach), <span class="dt">size=</span><span class="dv">5</span>, <span class="dt">alpha=</span><span class="fl">0.99</span>) +
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach), <span class="dt">size=</span><span class="dv">5</span>) +
 <span class="st">    </span><span class="kw">stat_smooth</span>(<span class="dt">method=</span>lm, <span class="dt">se=</span><span class="ot">FALSE</span>, <span class="dt">size=</span><span class="dv">1</span>, <span class="dt">linetype=</span><span class="st">&quot;dashed&quot;</span>, <span class="dt">color=</span><span class="st">&quot;black&quot;</span>) +
 <span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>), <span class="dt">guide=</span><span class="ot">FALSE</span>) +
 <span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>

@@ -152,7 +152,7 @@ ggplot(
         aes(x=r, y=jnd)
     ) + 
     geom_point(size=3, alpha=.25, color="#999999") +  
-    geom_point(aes(color=approach), data=weber_df, size=5, alpha=.99) +
+    geom_point(aes(color=approach), data=weber_df, size=5) +
     geom_segment(aes(color=approach, xend=r_A, yend=jnd), data=weber_df, 
         size=1, arrow=arrow(type="closed", length=unit(7, "point"))
     ) +
@@ -167,7 +167,7 @@ ggplot(
         weber_df,
         aes(x=r_A, y=jnd)
     ) + 
-    geom_point(aes(color=approach), size=5, alpha=0.99) +
+    geom_point(aes(color=approach), size=5) +
     stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed", color="black") +
     scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
     xlim(0.2, 0.9) + ylim(0, 0.3)
