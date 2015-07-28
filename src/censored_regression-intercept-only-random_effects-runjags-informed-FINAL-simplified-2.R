@@ -122,10 +122,9 @@ fit = if (!final_model) {
         run.jags(code(model), data=data_list, monitor=parameters, 
             method="parallel")
     } else {
-    #    autorun.jags(code(model), data=data_list, monitor=parameters,
-    #        method="parallel", thin.sample=TRUE)    
         run.jags(code(model), data=data_list, monitor=parameters,
     	    adapt=5000, burnin = 100000, sample = 10000, thin=10,
+            summarize = FALSE,
             method="parallel")
     }
 

@@ -1,13 +1,11 @@
-Rensink_se = .02
-Rensink_n = 20
-Rensink_sigma = Rensink_se * sqrt(Rensink_n)
-Rensink_mu = .2
-
-sigma_f = function(sigma) abs((exp(sigma^2) - 1) * exp(2*log(Rensink_mu) + sigma^2) - Rensink_sigma^2)
-Rensink_log_sigma = optimize(sigma_f, c(0.000001,10), tol=.00000001)$minimum
-
-
-
+# Back-of-the-napkin calculations to get some reasonable priors for the 
+# Bayesian model based on Rensink & Baldridge.
+#
+# N.B. These calculations were used as a rough guide, the final priors
+# and their rationale are discussed in the paper. 
+# 
+# Author: mjskay
+###############################################################################
 
 #derive some reasonable priors
 Rensink_slope = -.24
@@ -29,12 +27,10 @@ sd_2 = sd_1 * 2
 tau_inverse_max = sd_2^2
 tau_max = 1/tau_inverse_max
 
-
 #Now a prior on the intercept: chance, with variance on the order of twice the distance to the scatteplot intercept
 b_1 = log(.45)
 b_1_sd = 2 * (log(.45) - Rensink_log_intercept)
 b_1_tau = 1/(b_1_sd^2)
-
 
 #prior on the slope: up to twice it
 b_2 = 0
