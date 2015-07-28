@@ -1,196 +1,136 @@
-# Re-analysis of _Ranking Visualizations of Correlation Using Weber's Law_
+# Supplementary materials for _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_
 
-_Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_
+The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison et al.'s materials](https://github.com/TuftsVALT/ranking-correlation). 
+The analysis itself was largely written separately from the analysis in that repository.
+
+This repostory contains:
+
+* [README.md](README.md)|[.html](README.html): This file, generated from [README.Rmd](README.Rmd), which describes
+  the analyses from this paper using R code and associated output (below).
+* [data/master.csv](data/master.csv): Data from [Harrison et al.](https://github.com/TuftsVALT/ranking-correlation).
+* [src/](src/): Additional R files for the analysis (referred to in context below)
+* [output/](output/): Output from the analysis, including figures used in the paper and the Bayesian model ([output/bayesian_model.RData](output/bayesian_model.RData)).
+* [figure/](figure/): Figures output by compiling [README.Rmd](README.Rmd) and used in this file.
+
+The rest of this file details the analyses from this paper.
 
 ## Libraries needed for these analyses
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(cache=TRUE)           #default code chunk options
+knitr::opts_chunk$set(  #default code chunk options
+    cache = TRUE,          #cache code chunks
+    dev = "svg",      #nicer PNG figures
+    fig.width = 5,
+    fig.height = 4.5
+)           
 pander::panderOptions("table.split.table", Inf)     #don't split wide tables in output
 pander::panderOptions("table.style", "rmarkdown")   #table style that's supported by github
-memory.limit(8000)
 ```
 
+The following necessary libraries are available on CRAN, and can be installed using `install.packages`:
+
 ```{r libraries, message=FALSE, warning=FALSE, cache=FALSE}
-library(MASS)           #load first to prevent select() from masking dplyr::select()
-library(car)            #bcPower
-library(ggplot2)
-library(scales)
+library(Cairo)          # nicer PNG rendering
+library(car)            # powerTransform
+library(ggplot2)        # ggplot, stat_..., geom_..., etc
+library(scales)         # trans_format
 library(grid)
 library(gtable)
-library(plyr)
-library(dplyr)
-library(survival)       #Surv
+library(plyr)           # ldply
+library(magrittr)       # %>%, %<>%
+library(dplyr)          # filter, rename, mutate, group_by, ungroup, ...
+library(survival)       # Surv
 library(gamlss)
-library(gamlss.cens)    #cens
-library(pander)         #pander
+library(gamlss.cens)    # cens
+library(pander)
+library(stringr)        # str_sub
+library(runjags)
+library(coda)
+```
+
+We also use the following libraries available from Github, which can be installed using `devtools::install_github`:
+
+```{r libraries2, message=FALSE, warning=FALSE, cache=FALSE}
+library(tidybayes)      # compose_data, apply_prototypes, extract_samples, compare_levels
+                        # to install, run devtools::install_github("mjskay/tidybayes")
+library(metabayes)      # metajags
+                        # to install, run devtools::install_github("mjskay/metabayes")
+```
+
+Finally, some plotting functions used in this file are defined elsewhere for brevity here:
+
+```{r libraries3, cache=FALSE}
+source("src/plot_model.R")
 ```
 
 ```{r setup2, include=FALSE}
-source("src/openGraphSaveGraph.R")
-
 #set up ggplot theme
 theme_set(theme_bw() + theme(
     panel.grid.major=element_blank(), 
     panel.grid.minor=element_blank(),
     axis.line=element_line(color="black"),
     panel.border=element_blank(),
-    text=element_text(size=16),
+    text=element_text(size=14),
     axis.text=element_text(size=rel(15/16)),
     axis.ticks.length=unit(8, "points"),
     line=element_line(size=1)
 ))
-
-#model fit plotting function
-plot.residuals = function(m, log_x=FALSE, log_base=2, data_color = "#999999", sd_color="#d62d0e", dnorm_color="#066fff") {
-
-    data = data.frame(
-        eval(m$call$data),
-        `Fitted JND`=fitted(m), 
-        `Normalized Quantile Residuals`=resid(m), 
-        check.names=FALSE)
-        
-    scale_location = data %>%
-        group_by(interval=cut(`Fitted JND`, 15)) %>%
-        summarize(
-            `Fitted JND` = mean(as.numeric(strsplit(as.character(interval), '(\\(|\\,|\\])')[[1]][2:3])),
-            standard_deviation = sd(`Normalized Quantile Residuals`)
-            )
-
-    if (log_x) {
-        #change log base for easier to understand better output
-        data$`Fitted JND` = data$`Fitted JND` / log(log_base) 
-        scale_location$`Fitted JND` = scale_location$`Fitted JND` / log(log_base)
-    }
-
-    fitted_plot = ggplot(data, 
-            aes(x=`Fitted JND`, y=`Normalized Quantile Residuals`)
-        ) +
-        geom_point(color=data_color, size=2, alpha=0.25) +
-        geom_rug(sides="r", color=data_color) +
-        geom_hline(y=0, linetype="dashed", alpha=0.5) + 
-        geom_linerange(data=scale_location, aes(ymin=standard_deviation, ymax=-standard_deviation, y=NULL), color=sd_color, size=1.0) +
-        ylim(-5.5,5.5)
-    if (log_x) {
-        fitted_plot = fitted_plot +
-            scale_x_continuous(
-                limits=c(min(data$`Fitted JND`), max(data$`Fitted JND`)),
-                labels=trans_format(function(x) log_base^x, math_format(.x))) +
-            geom_vline(y=log2(.45)) +
-            annotation_logticks(sides="b")
-    } else {
-        fitted_plot = fitted_plot +
-            xlim(min(data$`Fitted JND`), max(data$`Fitted JND`))
-    }
-    fitted_plot = ggplotGrob(fitted_plot)
-        
-
-    residual_hist = ggplot(data, aes(x=`Normalized Quantile Residuals`)) +
-        stat_density(fill=data_color) +
-        geom_vline(x=0, linetype="dashed", alpha=0.5) + 
-        xlim(-5.5,5.5) +
-        ylim(0,0.6) +
-        stat_function(fun=dnorm, linetype="dashed", color=dnorm_color) +
-        coord_flip()
-    residual_hist = ggplotGrob(residual_hist)
-    
-    grid.newpage()
-    gtable(heights=unit(1,"null"), widths=unit(c(3,5,1),c("lines","null","null"))) %>%
-        gtable_add_grob(fitted_plot[,1:3], 1, 1) %>%
-        gtable_add_grob(fitted_plot[,4:5], 1, 2) %>%
-        gtable_add_grob(residual_hist[,4:5], 1, 3) %>%
-        grid.draw()
-
-}
-
-#model fitting plotting function for a given viz, showing residuals relative to r
-plot.r.residuals = function(df, m, plotted_visandsign, log_y=FALSE, log_base=2, data_color = "#999999", sd_color = "#d62d0e") {
-    #calculate residual variance
-    residual_df = df %>%
-        filter(visandsign == plotted_visandsign & !mad_cutoff) %>%
-        cbind(prediction=predict(m, newdata=.)) %>%
-        mutate(
-            jnd = if (log_y) log(jnd, base=log_base) else jnd,
-            prediction = if (log_y) prediction / log(log_base) else prediction
-            ) %>%
-        group_by(r) %>%
-        summarize(
-            sd = sd(jnd - prediction),
-            jnd = mean(prediction)
-        )
-    
-    #calculate fit line
-    coefs = as.list(coef(m))
-    fit_slope = coefs$r + coefs[[paste0("r:visandsign", plotted_visandsign)]]
-    fit_intercept = coefs$`(Intercept)` + coefs[[paste0("visandsign", plotted_visandsign)]]
-    
-    #chance threshold
-    chance = if (log_y) log(.45, base=log_base) else .45
-    
-    if (log_y) {
-        df$jnd = log(df$jnd, base=log_base)
-        fit_slope = fit_slope / log(log_base)
-        fit_intercept = fit_intercept / log(log_base)
-    }
-    
-    p = ggplot(
-            filter(df, visandsign == plotted_visandsign & !mad_cutoff),
-            aes(x=r, 
-                y=jnd 
-                )) + 
-        geom_point(size=3, alpha=.25, color=data_color) + 
-#        geom_hline(yintercept=chance, lty="dashed") +
-        geom_abline(slope=fit_slope, intercept=fit_intercept, size=1.0) +
-        geom_linerange(data=residual_df, aes(ymin=jnd - sd, ymax=jnd + sd, y=NULL), color=sd_color, size=1.0)
-    
-    if (log_y) {
-        p = p + 
-#            scale_y_continuous(labels=trans_format(function(x) log_base^x, math_format(.x))) +
-            annotation_logticks(sides="l")
-    }
-    
-    p
-}
-
 ```
 
+
 # Load and clean data
+
+First, we load and clean the data.
+
 ```{r clean}
-#read data
-df = read.csv("data/master.csv")
+df = read.csv("data/master.csv") %>%
 
-#clean up columns from original data
-df = df %>%
-    rename(r = rbase)
-
-#calculate values used to derive filtering conditions used in original paper
-df = df %>%
-    group_by(visandsign) %>%
-    summarize(p_chance = sum(jnd > .45)/length(jnd)) %>%    #proportion of jnd worse than chance
-    join(df)
-
-df = df %>%
-    group_by(visandsign, r, approach) %>%
-    summarize(
-        jnd_mad = mad(jnd),         #within-group median absolute deviation 
-        jnd_median = median(jnd)
+    #clean up column names from original data
+    rename(
+        r = rbase
     ) %>%
-    join(df)
 
-#filters used by original paper: when either is true, that data was excluded
-df$p_chance_cutoff = df$p_chance > .2   #visandsigns with > 20% observations of jnd worse than chance
-df$mad_cutoff = abs(df$jnd - df$jnd_median) > 3 * df$jnd_mad    #observations > 3 mads from the median
+    #calculate values used to derive filtering conditions used in original paper
+    group_by(visandsign) %>%
+    mutate(
+        #proportion of jnd worse than chance
+        p_chance = mean(jnd > .45),
+        #visandsigns with > 20% observations of jnd worse than chance
+        p_chance_cutoff = p_chance > .2
+    ) %>%
+    group_by(visandsign, r, approach) %>%
+    mutate(
+        #observations > 3 median-absolute deviations from the median within each group
+        mad_cutoff = abs(jnd - median(jnd)) > 3 * mad(jnd)
+    ) %>%
+    ungroup()
+```
 
-#approach should be coded as sum-to-zero so that other coefficients can be 
-#interpreted as relative to the mean of both approaches. We relevel first 
-#so that "below" is assigned 1 and "above" -1 (this is just to eliminate
-#a double-negative so that the sign of the coefficient of approach is positive,
-#makes interpretation slightly simpler)
+We code approach approach as sum-to-zero so that other coefficients can be 
+interpreted as relative to the mean of both approaches. We relevel first 
+so that `"below" == 1` and `"above" == -1` (this is just to eliminate
+a double-negative so that the sign of the coefficient of approach is positive,
+makes interpretation slightly simpler)
+
+```{r clean2}
 df$approach = relevel(df$approach, "below")
 contrasts(df$approach) = contr.sum
 ```
 
-# Weber-style model versus linear model fit to all data
+We also make a numeric version of the approach coded as sum-to-zero
+(this is easier to work with than the factor in many cases, for example
+if we want a model we can make predictions from with approach = 0)
+
+```{r clean3}
+df$approach_value = ifelse(df$approach == "above", -1, 1)
+```
+
+# Weber-style model versus log-linear model fit to all data
+
+First, let's construct a comparison of the Weber mean-fitting procedure to direct fitting (Fig 1 from the paper).
+
+Let's do the mean-fitting and adjustment described by Harrison (after Rensink):
+
 ```{r weber_example}
 weber_data_df = filter(df, visandsign == "scatterplotpositive", !mad_cutoff)
 
@@ -199,91 +139,91 @@ weber_df = weber_data_df %>%
     summarize(jnd = mean(jnd)) %>%
     group_by(r) %>%
     mutate(
-        mean.jnd.within.r = mean(jnd),
-        r_A = r + ifelse(approach == "above", 0.5, -0.5) * mean.jnd.within.r
+        mean_jnd_within_r = mean(jnd),
+        r_A = r + ifelse(approach == "above", 0.5, -0.5) * mean_jnd_within_r
     ) 
-
-
-#openGraph(6,5)    
-ggplot(
-        weber_data_df,
-        aes(x=r,
-            y=jnd
-            )) + 
-    geom_point(size=3, alpha=.25, color="#999999") +  
-    geom_point(data=weber_df, mapping=aes(color=approach, x=r), size=5, alpha=.99) +
-    geom_segment(data=adjusted_weber_df, mapping=aes(color=approach, x=r, xend=r_A, yend=jnd), size=1, arrow=arrow(type="closed", length=unit(7, "point"))) +
-    scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
-    xlim(0.2, 0.9) + ylim(0, 0.3)
-#saveGraph("output/weber-comparison-1", "pdf")
-
-#openGraph(6,5)    
-ggplot(
-        adjusted_weber_df,
-        aes(x=r_A,
-            y=jnd
-            )) + 
-    geom_point(mapping=aes(color=approach), size=5, alpha=0.99) +
-    stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed", color="black") +
-    scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
-    xlim(0.2, 0.9) + ylim(0, 0.3)
-#saveGraph("output/weber-comparison-2", "pdf")
-    
-    
-m = lm(log(jnd) ~ r, data=weber_data_df)
-#openGraph(6,5)
-ggplot(
-        weber_data_df,
-        aes(x=r,
-            y=jnd
-            )) + 
-    geom_point(size=3, alpha=.25, color="#999999") +  
-    stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed", color="black") +
-    stat_function(fun=function(x) exp(coef(m)[[1]] + x*coef(m)[[2]]), color="black", linetype="dashed") +
-    xlim(0.2, 0.9) + ylim(0, 0.3)
-#saveGraph("output/weber-comparison-3", "pdf")
-
 ```
+
+Now let's plot the fit, showing how the means are adjusted:
+
+```{r rensink_mean_adj}
+ggplot(
+        weber_data_df,
+        aes(x=r, y=jnd)
+    ) + 
+    geom_point(size=3, alpha=.25, color="#999999") +  
+    geom_point(aes(color=approach), data=weber_df, size=5, alpha=.99) +
+    geom_segment(aes(color=approach, xend=r_A, yend=jnd), data=weber_df, 
+        size=1, arrow=arrow(type="closed", length=unit(7, "point"))
+    ) +
+    scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
+    xlim(0.2, 0.9) + ylim(0, 0.3)
+```
+
+Then do a fit to the means:
+
+```{r rensink_fit}
+ggplot(
+        weber_df,
+        aes(x=r_A, y=jnd)
+    ) + 
+    geom_point(aes(color=approach), size=5, alpha=0.99) +
+    stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed", color="black") +
+    scale_color_manual(values=c("#d62d0e", "#066fff"), guide=FALSE) +
+    xlim(0.2, 0.9) + ylim(0, 0.3)
+```
+
+By comparison, a log-linear model looks like this:
+
+```{r log_linear_example}    
+m = lm(log(jnd) ~ r, data=weber_data_df)
+ggplot(
+        weber_data_df,
+        aes(x=r, y=jnd)
+    ) + 
+    geom_point(size=3, alpha=.25, color="#999999") +  
+    stat_function(fun=function(x) exp(coef(m)[[1]] + x*coef(m)[[2]]), 
+        color="black", linetype="dashed", size=1
+    ) +
+    xlim(0.2, 0.9) + ylim(0, 0.3)
+```
+
 
 # Linear model
-Let's see an example of approach:
+To understand how to correct for approach, let's see an example of it on parallel coordinates-negative (Fig 2):
 
-```{r approach_example}
-#openGraph(6,5)
-ggplot(
-        filter(df, visandsign == "parallelCoordinatesnegative", !mad_cutoff),
-        aes(x=r, 
-            y=jnd,
-            color=approach
-            )) + 
+```{r approach_example, fig.width=6}
+df %>%
+    filter(visandsign == "parallelCoordinatesnegative", !mad_cutoff) %>%
+    ggplot(
+        aes(x=r, y=jnd, color=approach)
+    ) + 
     geom_point(size=3, alpha=.15) +  
     stat_smooth(method=lm, se=FALSE, size=1, linetype="dashed") +
-    stat_smooth(method=lm, se=FALSE, mapping=aes(group=NA), size=1, color="black", linetype="dashed") +
+    stat_smooth(method=lm, se=FALSE, aes(group=NA), size=1, color="black", linetype="dashed") +
     scale_color_manual(values=c("#d62d0e", "#066fff")) +
     ylim(0,0.3)
-#saveGraph("output/approach-example", "pdf")
 
 ```
 
-This is a linear model with the original filter on MAD (> 3 MADs from the
-median) and visandsigns with > 20% JNDs worse than chance excluded.
+Now fit a linear model with the original filter on MAD (> 3 MADs from the
+median) and visandsigns with > 20% JNDs worse than chance excluded (Model 1 in the paper).
 
-```{r linear_model}
+```{r linear_model, results="hide"}
 m.linear = gamlss(jnd ~ r * visandsign * approach,
     sigma.formula = ~ visandsign,
     data=filter(df, !mad_cutoff & !p_chance_cutoff)
     )
-plot(m.linear)
 ```
 
-```{r linear_model_plot, include=FALSE, cache=FALSE}
-#openGraph(7,5)
-plot.residuals(m.linear)
-#saveGraph("output/residuals-linear", "pdf")
+And examine the fit (JND by r shown for scatterplot-negative, Fig 3A):
 
-#openGraph(4,5)
-plot.r.residuals(df, m.linear, "scatterplotnegative")
-#saveGraph("output/residuals-linear-by_r-scatterplotnegative", "pdf")
+```{r linear_model_residual_plot, warning=FALSE}
+plot_model_residuals_by_r(df, m.linear, "scatterplotnegative")
+```
+
+```{r linear_model_residual_plot_2, fig.width=7.5, warning=FALSE}
+plot_model_residuals(m.linear)
 ```
 
 # Log-linear model
@@ -299,26 +239,24 @@ summary(bc)
 This suggests a log-linear model (i.e., using log-transformed JND) may perform
 better than the linear model. Such a model stabilizes the variance in residuals.
 It also addresses the problem of the original model making nonsensical
-predictions (like JNDs less than 0).
+predictions (like JNDs less than 0). Let's fit that model:
 
-```{r log_linear_model}
-df$approach_value = contrasts(df$approach)[df$approach] #make numeric so we can easily make predictions without it
-m.loglinear = gamlss(jnd ~ r * visandsign * approach_value,
+```{r log_linear_model, results="hide"}
+m.loglinear = gamlss(jnd ~ r * visandsign * approach,
     sigma.formula = ~ visandsign,
     data=filter(df, !mad_cutoff & !p_chance_cutoff),
     family=LOGNO
     )
-plot(m.loglinear)
 ```
 
-```{r log_linear_model_plot, include=FALSE, cache=FALSE}
-#openGraph(7,5)
-plot.residuals(m.loglinear, log_x=TRUE)
-#saveGraph("output/residuals-loglinear", "pdf")
+And examine the fit (Fig 3B):
 
-#openGraph(4,5)
-plot.r.residuals(df, m.loglinear, "scatterplotnegative", log_y=TRUE)
-#saveGraph("output/residuals-loglinear-by_r-scatterplotnegative", "pdf")
+```{r log_linear_model_plot, warning=FALSE}
+plot_model_residuals_by_r(df, m.loglinear, "scatterplotnegative", log_y=TRUE)
+```
+
+```{r log_linear_model_plot_2, fig.width=7.5, warning=FALSE}
+plot_model_residuals(m.loglinear, log_x=TRUE)
 ```
 
 Note that the residuals here are more well-behaved in terms of normality and
@@ -334,150 +272,86 @@ pander(AIC(m.linear, m.loglinear))
 ```
 
 
-## Note on linear model with non-constant variance
-
-Note that we could fit a linear model with variance proportional to r. This addresses the
-problem of scale-location variance but does not address the problem of skewed residuals
-(as the log fit does), again suggesting the log fit is a better description of the data:  
-
-```{r linear_model_v}
-m.linear_v = gamlss(jnd ~ r * visandsign * approach,
-    sigma.formula = ~ r * visandsign,
-    data=filter(df, !mad_cutoff & !p_chance_cutoff)
-    )
-plot(m.linear_v)
-```
-
-```{r linear_vs_loglinear_AIC_3, eval=FALSE}
-AIC(m.linear, m.linear_v, m.loglinear)
-```
-
-```{r linear_vs_loglinear_AIC_4, echo=FALSE, results='asis'}
-pander(AIC(m.linear, m.loglinear))
-```
-
 
 # Log-linear model with censoring
-First let's explain censoring. 
+Next, let's look at some data to decide what to censor. With approach _from above_ (compare to Fig 5 in paper):
 
-```{r censored distribution example}
-actual_data = data.frame(x = rnorm(5000))
-breaks = seq(min(actual_data$x), max(actual_data$x), length=30)
-c = breaks[which.min(abs(breaks - 0.5))]  #make sure c ~= 1 and lines up with histogram breaks
-
-actual_data$censored = actual_data$x > c
-observed_data = actual_data %>% 
-    mutate(x = ifelse(censored, c, x),
-           dist = "observed")
-actual_data$dist = "actual"
-
-censored_data = rbind(actual_data, observed_data)
-censored_data_means = censored_data %>%
-    group_by(dist) %>%
-    summarize(x=mean(x))
-
-#openGraph(7,7)
-ggplot(censored_data, aes(
-        x = x,
-        fill = censored,
-        )) + 
-    stat_bin(breaks=breaks) +
-    geom_vline(xintercept=c, size=1, linetype="dashed") +
-    geom_vline(data=censored_data_means, mapping=aes(xintercept=x), size=1, linetype="dashed") +
-    facet_wrap(~dist, ncol=1)
-#saveGraph("output/censoring-explanation", "pdf")
-```    
-
-Next, let's look at some data to decide what to censor
-
-```{r looking_at_data_for_censoring}
-openGraph(7.5,4)
-ggplot(
-        filter(df, approach=="above", visandsign %in% c("linepositive","stackedareapositive")),
-        aes(x=r, 
-            y=log2(jnd),
-            color=not_censored
-    )) + 
-    geom_point(alpha=.25, size=2) + 
+```{r looking_at_data_for_censoring_above, fig.width=8, fig.height=10}
+df %>%
+    filter(approach=="above") %>%
+    ggplot(
+        aes(x=r, y=log2(jnd))
+    ) + 
+    geom_point(alpha=.25, size=2, color="#999999") + 
     geom_hline(yintercept=log2(.45), lty="dashed") + 
     stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
-    annotation_logticks(sides="l") +
+    annotation_logticks(sides="l", alpha=0.25) +
     scale_y_continuous(
-        limits=c(-6, -0.2),
         labels=trans_format(function(x) 2^x, math_format(.x))) +
-    facet_wrap(~visandsign)
-saveGraph("output/censored-data-from-above", "pdf")
-
-openGraph(7.5,4)
-ggplot(
-        filter(df, approach=="below", visandsign %in% c("parallelCoordinatespositive","parallelCoordinatesnegative")),
-        aes(x=r, 
-            y=log2(jnd),
-            color=not_censored
-    )) + 
-    geom_point(alpha=.25, size=2) + 
-    geom_hline(yintercept=log2(.45), lty="dashed") + 
-    stat_function(fun=function(x) log2(x), lty="dashed", color="black") + 
-    annotation_logticks(sides="l") +
-    scale_y_continuous(
-        limits=c(-6, -0.2),
-        labels=trans_format(function(x) 2^x, math_format(.x))) +
-    facet_wrap(~visandsign)
-saveGraph("output/censored-data-from-below", "pdf")
+    xlim(0.25,0.8) +
+    facet_wrap(~visandsign, ncol=4)
 ```
 
-This model addresses outliers through censoring. We remove both filters used in
-the original paper, and instead uses censoring for values that are close to or
+And with approach _from below_ (compare to Fig 6 in paper):
+
+```{r looking_at_data_for_censoring_below, fig.width=8, fig.height=10}
+df %>%
+    filter(approach=="below") %>%
+    ggplot(
+        aes(x=r, y=log2(jnd))
+    ) + 
+    geom_point(alpha=.25, size=2, color="#999999") + 
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    stat_function(fun=function(x) log2(x), lty="dashed", color="black") + 
+    annotation_logticks(sides="l", alpha=0.25) +
+    scale_y_continuous(
+        labels=trans_format(function(x) 2^x, math_format(.x))) +
+    xlim(0.25,0.8) +
+    facet_wrap(~visandsign, ncol=4)
+```
+
+We want to address outliers through censoring. We remove both cutoffs used in
+the original paper, and instead use censoring for values that are close to or
 worse than chance, or close to or past the ceiling of JND (from above) and the
 floor of JND (from below).
 
-First, we derive the thresholds used for censoring.
+As described in the paper (and with reference to the above two figures), we derive 
+the thresholds used for censoring based on observations being above/below the ceiling/floor, and chance:
 
 ```{r censoring_parameters}
-#censorship based on being above / below ceiling/floor , and chance
-df = mutate(df,
+df %<>% mutate(
     censoring_threshold = ifelse(approach == "below", 
                     pmin(r - .05, .4), 
                     pmin(.95 - r, .4)),
-    not_censored = jnd <= censoring_threshold,
+    censored = jnd > censoring_threshold,
     censored_jnd = pmin(jnd, censoring_threshold)
 )
 ```
 
 Then, we build the censored model.
 
-```{r censored_model}
-m.censored = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach_value,
+```{r censored_model, results="hide"}
+m.censored = gamlss(Surv(censored_jnd, !censored) ~ r * visandsign * approach_value,
     sigma.formula = ~ visandsign,
     data=df,
     family=cens(LOGNO)
     )
-plot(m.censored)
 ```
 
-We can compare against a censored linear model:
+Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison).
+First we fit the log-linear model without censoring or cutoffs:
 
-```{r censored_linear}
-m.censored_linear = gamlss(Surv(censored_jnd, not_censored) ~ r * visandsign * approach_value,
-    sigma.formula = ~ visandsign,
-    data=df,
-    family=cens(NO)
-    )
-plot(m.censored_linear)
-AIC(m.censored,m.censored_linear)
-```
-
-
-Now let's compare to the non-censored model
-
-```{r censored_verses_not_comparison}
+```{r censored_versus_not_comparison, results="hide"}
 m.loglinear.all = gamlss(jnd ~ r * visandsign * approach_value,
     sigma.formula = ~ visandsign,
     data=df,
     family=LOGNO
     )
+```
 
-#get fits from models
+Then we'll generate fit lines from both models:
+
+```{r censored_versus_not_comparison_2}
 models = list(uncensored=m.loglinear.all, censored=m.censored)
 model_fits = ldply(c("uncensored", "censored"), function(m) {
     expand.grid(r=c(.2, .9), visandsign=levels(df$visandsign)) %>%
@@ -485,97 +359,123 @@ model_fits = ldply(c("uncensored", "censored"), function(m) {
     cbind(prediction = predict(models[[m]], newdata=.)) %>%
     mutate(model = m)
 })
-
-
-openGraph(7.5,4)
-ggplot(
-        filter(df, visandsign %in% c("linepositive","donutpositive")),
-        aes(x=r, 
-            y=log2(jnd),
-    )) + 
-    geom_point(alpha=.25, size=3, color="#999999") + 
-    geom_hline(yintercept=log2(.45), lty="dashed") + 
-#    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") +
-    geom_line(data=filter(model_fits, visandsign %in% c("linepositive","donutpositive")), mapping=aes(y=prediction/log(2), color=model)) + 
-    annotation_logticks(sides="l") +
-    scale_y_continuous(
-        limits=c(-6, -0.1),
-        labels=trans_format(function(x) 2^x, math_format(.x))) +
-    facet_wrap(~visandsign)
-saveGraph("output/censor-bias", "pdf")
-
-
-#compare fit and error of censored and non-censored regression on something near chance
-#have to use survreg here because gamlss won't give se for unobserved approach_value == 0,
-#the resulting model is the same.
-censored_example_vis = "linenegative"
-m.censored_se = survreg(formula = Surv(censored_jnd, not_censored) ~ r * approach_value, 
-    dist = "lognormal",  
-    data = filter(df, visandsign == censored_example_vis)) 
-
-m.uncensored_se = lm(formula = log(jnd) ~ r * approach_value,   
-    data = filter(df, visandsign == censored_example_vis))
-    
-newdata = data.frame(r=3:8/10, approach_value=0)
-censored_pred = predict(m.censored_se, newdata=newdata, se.fit=TRUE) %>%
-    data.frame(newdata, model="censored") %>%
-    mutate(fit = log(fit))
-uncensored_pred = predict(m.uncensored_se, newdata=newdata, se.fit=TRUE) %>%
-    data.frame(newdata, model="uncensored")
-
-rbind.fill(censored_pred, uncensored_pred) %>%
-    mutate(
-        uc = fit + se.fit*qnorm(.975),
-        lc = fit - se.fit*qnorm(.975)
-    ) %>%
-    ggplot(
-        aes(x=r, 
-            y=fit / log(2),
-            color=model
-    )) + 
-    geom_hline(yintercept=log2(.45), lty="dashed") + 
-    geom_ribbon(mapping=aes(ymin=lc/log(2), ymax=uc/log(2), fill=model), color=NA, alpha=0.25) + 
-    geom_line() + 
-    annotation_logticks(sides="l") +
-    scale_y_continuous(
-        limits=c(-6, -0.2),
-        labels=trans_format(function(x) 2^x, math_format(.x)))
-
-
 ```
 
-```{r censored_model_plot, include=FALSE, cache=FALSE}
-#openGraph(7,5)
-plot.residuals(m.censored, log_x=TRUE)
-#saveGraph("output/residuals-censored", "pdf")
-```    
+Finally, we'll plot the fit for each condition, with and without censoring
+(compare to Fig 7 in paper):
 
+```{r censored_versus_not_comparison_3, fig.width=9, fig.height=10}
+ggplot(
+        df,
+        aes(x=r, y=log2(jnd)),
+    ) + 
+    geom_point(alpha=.25, size=2, color="#999999") + 
+    geom_hline(yintercept=log2(.45), lty="dashed") + 
+    geom_line(data=model_fits, mapping=aes(y=prediction/log(2), color=model)) + 
+    annotation_logticks(sides="l", alpha=0.25) +
+    scale_y_continuous(
+        labels=trans_format(function(x) 2^x, math_format(.x))) +
+    facet_wrap(~visandsign, ncol=4)
+```
 
+Note that when we are far from chance, the models are virtually identical. The improvment
+comes when we look at conditions with some or many observations worse than chance (and
+especially those conditions omitted from analysis in Harrison et al.).
 
 # Bayesian log-linear model with censoring
 
+The Bayesian model can be fit by running [src/fit_bayesian_model.R](src/fit_bayesian_model.R) (it is not done here
+because it takes a bit of time). That file fits a model and
+saves it to [output/bayesian_model.RData](output/bayesian_model.RData) (specifically the `fit` variable in that saved environment).
 
-# Random slopes
+We can load that model:
 
-Turns out there isn't a whole lot of variation in slopes, so the fact that we can't estimate it doesn't seem like that much of a problem:
-
-```{r participant_slopes}
-ggplot(
-        df,
-        aes(x=r, 
-            y=log2(jnd)
-    )) + 
-    geom_point(alpha=.25, color="#999999", size=2) + 
-    stat_smooth(method=lm, alpha=.1, mapping=aes(group=participant), se=FALSE) +
-    geom_hline(yintercept=log(.45), lty="dashed") + 
-    geom_hline(yintercept=log(.40), lty="dashed") + 
-    stat_function(fun=function(x) log2(1 - x), lty="dashed", color="black") + 
-    stat_function(fun=function(x) log2(x), lty="dashed", color="black") +
-    facet_wrap(~visandsign)
+```{r load_bayesian_model}
+load(file="output/bayesian_model.RData")
 ```
 
+First we will decorate the model so that factors (such as `visandsign`) are recovered when we extract data from it:
 
+```{r apply_prototypes}
+fit %<>% apply_prototypes(df)
+```
 
-# Precision of estimation for random correlations rendered using each chart type
- 
+Then we get samples of the coefficients of the underlying linear models
 
+```{r extract_b}
+b_samples = extract_samples(fit, b[visandsign, ..]) %>%
+    mutate( 
+        #split vis and sign apart so we can apply aesthetics to them separately
+        vis = factor(str_sub(visandsign, end=-9)),
+        sign = factor(str_sub(visandsign, start=-8))
+    )
+b_medians = b_samples %>%
+    group_by(visandsign, vis, sign) %>% #vis, sign are redundant here but we want to keep them around
+    summarise(b1 = median(b1), b2 = median(b2), b3 = median(b3), b4 = median(b4))
+```
+
+Then we generate a curve and gradient for log(mu) by r:
+
+```{r mu_by_r, results="hide"}
+memory.limit(8000)  #we need a decent amount of RAM to do this
+pred_r_min = .3
+pred_r_max = .8
+pred_r_step = .1/8
+mu_by_r = ldply(seq(pred_r_min, pred_r_max, by = pred_r_step), 
+    function(r) within(b_samples, {
+        r <- r
+        log_mu <- b1 + b2*r
+    }))
+```
+
+And we plot it, in log space (Fig 8.1):
+
+```{r plot_mu_by_r, fig.width=8.5, fig.height=6.5}
+mu_by_r %>%
+    ggplot(
+        aes(x=r, y=log_mu/log(2), group=visandsign)
+    ) + 
+    geom_bin2d(
+        aes(alpha=..density.., fill=vis, color=NULL),
+        breaks=list(
+            x=seq(pred_r_min - pred_r_step/2, pred_r_max + pred_r_step/2, pred_r_step), 
+            y=seq(min(mu_by_r$log_mu/log(2)), max(mu_by_r$log_mu/log(2)), length=150)
+        )
+    ) +
+    geom_segment(data=b_medians, aes(x=.3, y=I((b1 + .3 * b2)/log(2)), xend=.8, yend=I((b1 + .8 * b2)/log(2)), color=vis, linetype=sign), size=1) + 
+    geom_hline(yintercept=log2(.45), lty="dashed") +
+    geom_text(data=b_medians, aes(y=(b1 + .8 * b2)/log(2), x=.82, color=vis, label=visandsign), hjust=0, vjust=0.25) +
+    scale_alpha_continuous(range=c(0.01,0.6), guide=FALSE) +
+    scale_color_discrete(guide=FALSE) +
+    scale_fill_discrete(guide=FALSE) +
+    scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
+    scale_x_continuous(breaks=seq(0.3,0.8,by=0.1), limits=c(0.3,1)) +
+    annotation_logticks(sides="l")
+```
+
+We can group the conditions, and examine their typical differences in log(mu) (Fig 8.3):
+
+```{r typical_mu_differences}
+extract_samples(fit, typical_mu[visandsign] | visandsign) %>%
+    mutate(     #group by partial ranking
+        group1 = rowMeans(cbind(scatterplotnegative, scatterplotpositive, parallelCoordinatesnegative)),
+        group2 = rowMeans(cbind(ordered_linepositive, donutnegative, stackedbarnegative, ordered_linenegative, stackedlinenegative, stackedareanegative)),
+        group3 = rowMeans(cbind(parallelCoordinatespositive, radarpositive, linepositive)),
+        group4 = rowMeans(cbind(donutpositive, linenegative, radarnegative, stackedareapositive, stackedbarpositive, stackedlinepositive))
+    ) %>%
+    with(rbind( #get differences between groups
+        data.frame(comparison = "2-1", difference = group2 - group1),
+        data.frame(comparison = "3-2", difference = group3 - group2),
+        data.frame(comparison = "4-3", difference = group4 - group3)
+    )) %>%
+    ggeye(aes(x=comparison, y=difference/log(2))) + 
+    geom_hline(y=0, lty="dashed")
+```
+
+We can also examine the between-participant variance for the high-performing group (Fig 9):
+
+```{r u_tau_group1, fig.width=6}
+extract_samples(fit, u_tau[visandsign]) %>%
+    filter(visandsign %in% c("scatterplotpositive","scatterplotnegative","parallelCoordinatesnegative")) %>%
+    ggeye(aes(x=visandsign, y=sqrt(1/u_tau)))
+```
