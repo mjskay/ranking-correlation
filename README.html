@@ -1,0 +1,385 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+  </style>
+  <link rel="stylesheet" href="github-markdown.css" type="text/css" />
+</head>
+<body>
+<h1 id="supplementary-materials-for-beyond-webers-law-a-second-look-at-ranking-visualizations-of-correlation">Supplementary materials for <em>Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation</em></h1>
+<p>The data in this repository (<a href="data/master.csv" class="uri">data/master.csv</a>) is taken from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison et al.'s materials</a>. The analysis itself was largely written separately from the analysis in that repository.</p>
+<p>This repostory contains:</p>
+<ul>
+<li><a href="README.md" class="uri">README.md</a>|<a href="README.html">.html</a>: This file, generated from <a href="README.Rmd" class="uri">README.Rmd</a>, which describes the analyses from this paper using R code and associated output (below).</li>
+<li><a href="data/master.csv" class="uri">data/master.csv</a>: Data from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison et al.</a>.</li>
+<li><a href="src/" class="uri">src/</a>: Additional R files for the analysis (referred to in context below)</li>
+<li><a href="output/" class="uri">output/</a>: Output from the analysis, including figures used in the paper and the Bayesian model (<a href="output/bayesian_model.RData" class="uri">output/bayesian_model.RData</a>).</li>
+<li><a href="figure/" class="uri">figure/</a>: Figures output by compiling <a href="README.Rmd" class="uri">README.Rmd</a> and used in this file.</li>
+</ul>
+<p>The rest of this file details the analyses from this paper.</p>
+<h2 id="libraries-needed-for-these-analyses">Libraries needed for these analyses</h2>
+<p>The following necessary libraries are available on CRAN, and can be installed using <code>install.packages</code>:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(Cairo)          <span class="co"># nicer PNG rendering</span>
+<span class="kw">library</span>(car)            <span class="co"># powerTransform</span>
+<span class="kw">library</span>(ggplot2)        <span class="co"># ggplot, stat_..., geom_..., etc</span>
+<span class="kw">library</span>(scales)         <span class="co"># trans_format</span>
+<span class="kw">library</span>(grid)
+<span class="kw">library</span>(gtable)
+<span class="kw">library</span>(plyr)           <span class="co"># ldply</span>
+<span class="kw">library</span>(magrittr)       <span class="co"># %&gt;%, %&lt;&gt;%</span>
+<span class="kw">library</span>(dplyr)          <span class="co"># filter, rename, mutate, group_by, ungroup, ...</span>
+<span class="kw">library</span>(survival)       <span class="co"># Surv</span>
+<span class="kw">library</span>(gamlss)
+<span class="kw">library</span>(gamlss.cens)    <span class="co"># cens</span>
+<span class="kw">library</span>(pander)
+<span class="kw">library</span>(stringr)        <span class="co"># str_sub</span>
+<span class="kw">library</span>(runjags)
+<span class="kw">library</span>(coda)</code></pre>
+<p>We also use the following libraries available from Github, which can be installed using <code>devtools::install_github</code>:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(tidybayes)      <span class="co"># compose_data, apply_prototypes, extract_samples, compare_levels</span>
+                        <span class="co"># to install, run devtools::install_github(&quot;mjskay/tidybayes&quot;)</span>
+<span class="kw">library</span>(metabayes)      <span class="co"># metajags</span>
+                        <span class="co"># to install, run devtools::install_github(&quot;mjskay/metabayes&quot;)</span></code></pre>
+<p>Finally, some plotting functions used in this file are defined elsewhere for brevity here:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">source</span>(<span class="st">&quot;src/plot_model.R&quot;</span>)</code></pre>
+<h1 id="load-and-clean-data">Load and clean data</h1>
+<p>First, we load and clean the data.</p>
+<pre class="sourceCode r"><code class="sourceCode r">df =<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;data/master.csv&quot;</span>) %&gt;%
+
+<span class="st">    </span><span class="co">#clean up column names from original data</span>
+<span class="st">    </span><span class="kw">rename</span>(
+        <span class="dt">r =</span> rbase
+    ) %&gt;%
+
+<span class="st">    </span><span class="co">#calculate values used to derive filtering conditions used in original paper</span>
+<span class="st">    </span><span class="kw">group_by</span>(visandsign) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>(
+        <span class="co">#proportion of jnd worse than chance</span>
+        <span class="dt">p_chance =</span> <span class="kw">mean</span>(jnd &gt;<span class="st"> </span>.<span class="dv">45</span>),
+        <span class="co">#visandsigns with &gt; 20% observations of jnd worse than chance</span>
+        <span class="dt">p_chance_cutoff =</span> p_chance &gt;<span class="st"> </span>.<span class="dv">2</span>
+    ) %&gt;%
+<span class="st">    </span><span class="kw">group_by</span>(visandsign, r, approach) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>(
+        <span class="co">#observations &gt; 3 median-absolute deviations from the median within each group</span>
+        <span class="dt">mad_cutoff =</span> <span class="kw">abs</span>(jnd -<span class="st"> </span><span class="kw">median</span>(jnd)) &gt;<span class="st"> </span><span class="dv">3</span> *<span class="st"> </span><span class="kw">mad</span>(jnd)
+    ) %&gt;%
+<span class="st">    </span><span class="kw">ungroup</span>()</code></pre>
+<p>We code approach approach as sum-to-zero so that other coefficients can be interpreted as relative to the mean of both approaches. We relevel first so that <code>&quot;below&quot; == 1</code> and <code>&quot;above&quot; == -1</code> (this is just to eliminate a double-negative so that the sign of the coefficient of approach is positive, makes interpretation slightly simpler)</p>
+<pre class="sourceCode r"><code class="sourceCode r">df$approach =<span class="st"> </span><span class="kw">relevel</span>(df$approach, <span class="st">&quot;below&quot;</span>)
+<span class="kw">contrasts</span>(df$approach) =<span class="st"> </span>contr.sum</code></pre>
+<p>We also make a numeric version of the approach coded as sum-to-zero (this is easier to work with than the factor in many cases, for example if we want a model we can make predictions from with approach = 0)</p>
+<pre class="sourceCode r"><code class="sourceCode r">df$approach_value =<span class="st"> </span><span class="kw">ifelse</span>(df$approach ==<span class="st"> &quot;above&quot;</span>, -<span class="dv">1</span>, <span class="dv">1</span>)</code></pre>
+<h1 id="weber-style-model-versus-log-linear-model-fit-to-all-data">Weber-style model versus log-linear model fit to all data</h1>
+<p>First, let's construct a comparison of the Weber mean-fitting procedure to direct fitting (Fig 1 from the paper).</p>
+<p>Let's do the mean-fitting and adjustment described by Harrison (after Rensink):</p>
+<pre class="sourceCode r"><code class="sourceCode r">weber_data_df =<span class="st"> </span><span class="kw">filter</span>(df, visandsign ==<span class="st"> &quot;scatterplotpositive&quot;</span>, !mad_cutoff)
+
+weber_df =<span class="st"> </span>weber_data_df %&gt;%
+<span class="st">    </span><span class="kw">group_by</span>(approach, r) %&gt;%
+<span class="st">    </span><span class="kw">summarize</span>(<span class="dt">jnd =</span> <span class="kw">mean</span>(jnd)) %&gt;%
+<span class="st">    </span><span class="kw">group_by</span>(r) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>(
+        <span class="dt">mean_jnd_within_r =</span> <span class="kw">mean</span>(jnd),
+        <span class="dt">r_A =</span> r +<span class="st"> </span><span class="kw">ifelse</span>(approach ==<span class="st"> &quot;above&quot;</span>, <span class="fl">0.5</span>, -<span class="fl">0.5</span>) *<span class="st"> </span>mean_jnd_within_r
+    ) </code></pre>
+<p>Now let's plot the fit, showing how the means are adjusted:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggplot</span>(
+        weber_data_df,
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span>jnd)
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">size=</span><span class="dv">3</span>, <span class="dt">alpha=</span>.<span class="dv">25</span>, <span class="dt">color=</span><span class="st">&quot;#999999&quot;</span>) +<span class="st">  </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach), <span class="dt">data=</span>weber_df, <span class="dt">size=</span><span class="dv">5</span>, <span class="dt">alpha=</span>.<span class="dv">99</span>) +
+<span class="st">    </span><span class="kw">geom_segment</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach, <span class="dt">xend=</span>r_A, <span class="dt">yend=</span>jnd), <span class="dt">data=</span>weber_df, 
+        <span class="dt">size=</span><span class="dv">1</span>, <span class="dt">arrow=</span><span class="kw">arrow</span>(<span class="dt">type=</span><span class="st">&quot;closed&quot;</span>, <span class="dt">length=</span><span class="kw">unit</span>(<span class="dv">7</span>, <span class="st">&quot;point&quot;</span>))
+    ) +
+<span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>), <span class="dt">guide=</span><span class="ot">FALSE</span>) +
+<span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>
+<div class="figure">
+<img src="figure/rensink_mean_adj-1.svg" alt="plot of chunk rensink_mean_adj" /><p class="caption">plot of chunk rensink_mean_adj</p>
+</div>
+<p>Then do a fit to the means:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggplot</span>(
+        weber_df,
+        <span class="kw">aes</span>(<span class="dt">x=</span>r_A, <span class="dt">y=</span>jnd)
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">color=</span>approach), <span class="dt">size=</span><span class="dv">5</span>, <span class="dt">alpha=</span><span class="fl">0.99</span>) +
+<span class="st">    </span><span class="kw">stat_smooth</span>(<span class="dt">method=</span>lm, <span class="dt">se=</span><span class="ot">FALSE</span>, <span class="dt">size=</span><span class="dv">1</span>, <span class="dt">linetype=</span><span class="st">&quot;dashed&quot;</span>, <span class="dt">color=</span><span class="st">&quot;black&quot;</span>) +
+<span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>), <span class="dt">guide=</span><span class="ot">FALSE</span>) +
+<span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>
+<div class="figure">
+<img src="figure/rensink_fit-1.svg" alt="plot of chunk rensink_fit" /><p class="caption">plot of chunk rensink_fit</p>
+</div>
+<p>By comparison, a log-linear model looks like this:</p>
+<pre class="sourceCode r"><code class="sourceCode r">m =<span class="st"> </span><span class="kw">lm</span>(<span class="kw">log</span>(jnd) ~<span class="st"> </span>r, <span class="dt">data=</span>weber_data_df)
+<span class="kw">ggplot</span>(
+        weber_data_df,
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span>jnd)
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">size=</span><span class="dv">3</span>, <span class="dt">alpha=</span>.<span class="dv">25</span>, <span class="dt">color=</span><span class="st">&quot;#999999&quot;</span>) +<span class="st">  </span>
+<span class="st">    </span><span class="kw">stat_function</span>(<span class="dt">fun=</span>function(x) <span class="kw">exp</span>(<span class="kw">coef</span>(m)[[<span class="dv">1</span>]] +<span class="st"> </span>x*<span class="kw">coef</span>(m)[[<span class="dv">2</span>]]), 
+        <span class="dt">color=</span><span class="st">&quot;black&quot;</span>, <span class="dt">linetype=</span><span class="st">&quot;dashed&quot;</span>, <span class="dt">size=</span><span class="dv">1</span>
+    ) +
+<span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>
+<div class="figure">
+<img src="figure/log_linear_example-1.svg" alt="plot of chunk log_linear_example" /><p class="caption">plot of chunk log_linear_example</p>
+</div>
+<h1 id="linear-model">Linear model</h1>
+<p>To understand how to correct for approach, let's see an example of it on parallel coordinates-negative (Fig 2):</p>
+<pre class="sourceCode r"><code class="sourceCode r">df %&gt;%
+<span class="st">    </span><span class="kw">filter</span>(visandsign ==<span class="st"> &quot;parallelCoordinatesnegative&quot;</span>, !mad_cutoff) %&gt;%
+<span class="st">    </span><span class="kw">ggplot</span>(
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span>jnd, <span class="dt">color=</span>approach)
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">size=</span><span class="dv">3</span>, <span class="dt">alpha=</span>.<span class="dv">15</span>) +<span class="st">  </span>
+<span class="st">    </span><span class="kw">stat_smooth</span>(<span class="dt">method=</span>lm, <span class="dt">se=</span><span class="ot">FALSE</span>, <span class="dt">size=</span><span class="dv">1</span>, <span class="dt">linetype=</span><span class="st">&quot;dashed&quot;</span>) +
+<span class="st">    </span><span class="kw">stat_smooth</span>(<span class="dt">method=</span>lm, <span class="dt">se=</span><span class="ot">FALSE</span>, <span class="kw">aes</span>(<span class="dt">group=</span><span class="ot">NA</span>), <span class="dt">size=</span><span class="dv">1</span>, <span class="dt">color=</span><span class="st">&quot;black&quot;</span>, <span class="dt">linetype=</span><span class="st">&quot;dashed&quot;</span>) +
+<span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>)) +
+<span class="st">    </span><span class="kw">ylim</span>(<span class="dv">0</span>,<span class="fl">0.3</span>)</code></pre>
+<div class="figure">
+<img src="figure/approach_example-1.svg" alt="plot of chunk approach_example" /><p class="caption">plot of chunk approach_example</p>
+</div>
+<p>Now fit a linear model with the original filter on MAD (&gt; 3 MADs from the median) and visandsigns with &gt; 20% JNDs worse than chance excluded (Model 1 in the paper).</p>
+<pre class="sourceCode r"><code class="sourceCode r">m.linear =<span class="st"> </span><span class="kw">gamlss</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach,
+    <span class="dt">sigma.formula =</span> ~<span class="st"> </span>visandsign,
+    <span class="dt">data=</span><span class="kw">filter</span>(df, !mad_cutoff &amp;<span class="st"> </span>!p_chance_cutoff)
+    )</code></pre>
+<p>And examine the fit (JND by r shown for scatterplot-negative, Fig 3A):</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals_by_r</span>(df, m.linear, <span class="st">&quot;scatterplotnegative&quot;</span>)</code></pre>
+<div class="figure">
+<img src="figure/linear_model_residual_plot-1.svg" alt="plot of chunk linear_model_residual_plot" /><p class="caption">plot of chunk linear_model_residual_plot</p>
+</div>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals</span>(m.linear)</code></pre>
+<div class="figure">
+<img src="figure/linear_model_residual_plot_2-1.svg" alt="plot of chunk linear_model_residual_plot_2" /><p class="caption">plot of chunk linear_model_residual_plot_2</p>
+</div>
+<h1 id="log-linear-model">Log-linear model</h1>
+<p>If we estimate a Box-Cox power transform from the original model, the confidence interval for <span class="math"><em>λ</em></span> includes 0 (log transform) and excludes 1 (identity, i.e. the linear model):</p>
+<pre class="sourceCode r"><code class="sourceCode r">bc =<span class="st"> </span><span class="kw">powerTransform</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach, <span class="dt">data=</span><span class="kw">filter</span>(df, !mad_cutoff &amp;<span class="st"> </span>!p_chance_cutoff))
+<span class="kw">summary</span>(bc)</code></pre>
+<pre><code>## bcPower Transformation to Normality 
+## 
+##    Est.Power Std.Err. Wald Lower Bound Wald Upper Bound
+## Y1    0.0292   0.0175           -0.005           0.0635
+## 
+## Likelihood ratio tests about transformation parameters
+##                               LRT df       pval
+## LR test, lambda = (0)    2.797901  1 0.09438782
+## LR test, lambda = (1) 2756.766122  1 0.00000000</code></pre>
+<p>This suggests a log-linear model (i.e., using log-transformed JND) may perform better than the linear model. Such a model stabilizes the variance in residuals. It also addresses the problem of the original model making nonsensical predictions (like JNDs less than 0). Let's fit that model:</p>
+<pre class="sourceCode r"><code class="sourceCode r">m.loglinear =<span class="st"> </span><span class="kw">gamlss</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach,
+    <span class="dt">sigma.formula =</span> ~<span class="st"> </span>visandsign,
+    <span class="dt">data=</span><span class="kw">filter</span>(df, !mad_cutoff &amp;<span class="st"> </span>!p_chance_cutoff),
+    <span class="dt">family=</span>LOGNO
+    )</code></pre>
+<p>And examine the fit (Fig 3B):</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals_by_r</span>(df, m.loglinear, <span class="st">&quot;scatterplotnegative&quot;</span>, <span class="dt">log_y=</span><span class="ot">TRUE</span>)</code></pre>
+<div class="figure">
+<img src="figure/log_linear_model_plot-1.svg" alt="plot of chunk log_linear_model_plot" /><p class="caption">plot of chunk log_linear_model_plot</p>
+</div>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals</span>(m.loglinear, <span class="dt">log_x=</span><span class="ot">TRUE</span>)</code></pre>
+<div class="figure">
+<img src="figure/log_linear_model_plot_2-1.svg" alt="plot of chunk log_linear_model_plot_2" /><p class="caption">plot of chunk log_linear_model_plot_2</p>
+</div>
+<p>Note that the residuals here are more well-behaved in terms of normality and scale-location invariance. We also have lower AIC in the log-linear model (-1.1683425 × 10<sup>4</sup>) compared to the linear model: (-1.0036835 × 10<sup>4</sup>).</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">AIC</span>(m.linear, m.loglinear)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="center"> </th>
+<th align="center">df</th>
+<th align="center">AIC</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center"><strong>m.loglinear</strong></td>
+<td align="center">60</td>
+<td align="center">-11683</td>
+</tr>
+<tr class="even">
+<td align="center"><strong>m.linear</strong></td>
+<td align="center">60</td>
+<td align="center">-10037</td>
+</tr>
+</tbody>
+</table>
+<h1 id="log-linear-model-with-censoring">Log-linear model with censoring</h1>
+<p>Next, let's look at some data to decide what to censor. With approach <em>from above</em> (compare to Fig 5 in paper):</p>
+<pre class="sourceCode r"><code class="sourceCode r">df %&gt;%
+<span class="st">    </span><span class="kw">filter</span>(approach==<span class="st">&quot;above&quot;</span>) %&gt;%
+<span class="st">    </span><span class="kw">ggplot</span>(
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span><span class="kw">log2</span>(jnd))
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">alpha=</span>.<span class="dv">25</span>, <span class="dt">size=</span><span class="dv">2</span>, <span class="dt">color=</span><span class="st">&quot;#999999&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_hline</span>(<span class="dt">yintercept=</span><span class="kw">log2</span>(.<span class="dv">45</span>), <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">stat_function</span>(<span class="dt">fun=</span>function(x) <span class="kw">log2</span>(<span class="dv">1</span> -<span class="st"> </span>x), <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>, <span class="dt">color=</span><span class="st">&quot;black&quot;</span>) +
+<span class="st">    </span><span class="kw">annotation_logticks</span>(<span class="dt">sides=</span><span class="st">&quot;l&quot;</span>, <span class="dt">alpha=</span><span class="fl">0.25</span>) +
+<span class="st">    </span><span class="kw">scale_y_continuous</span>(
+        <span class="dt">labels=</span><span class="kw">trans_format</span>(function(x) <span class="dv">2</span>^x, <span class="kw">math_format</span>(.x))) +
+<span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.25</span>,<span class="fl">0.8</span>) +
+<span class="st">    </span><span class="kw">facet_wrap</span>(~visandsign, <span class="dt">ncol=</span><span class="dv">4</span>)</code></pre>
+<div class="figure">
+<img src="figure/looking_at_data_for_censoring_above-1.svg" alt="plot of chunk looking_at_data_for_censoring_above" /><p class="caption">plot of chunk looking_at_data_for_censoring_above</p>
+</div>
+<p>And with approach <em>from below</em> (compare to Fig 6 in paper):</p>
+<pre class="sourceCode r"><code class="sourceCode r">df %&gt;%
+<span class="st">    </span><span class="kw">filter</span>(approach==<span class="st">&quot;below&quot;</span>) %&gt;%
+<span class="st">    </span><span class="kw">ggplot</span>(
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span><span class="kw">log2</span>(jnd))
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">alpha=</span>.<span class="dv">25</span>, <span class="dt">size=</span><span class="dv">2</span>, <span class="dt">color=</span><span class="st">&quot;#999999&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_hline</span>(<span class="dt">yintercept=</span><span class="kw">log2</span>(.<span class="dv">45</span>), <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">stat_function</span>(<span class="dt">fun=</span>function(x) <span class="kw">log2</span>(x), <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>, <span class="dt">color=</span><span class="st">&quot;black&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">annotation_logticks</span>(<span class="dt">sides=</span><span class="st">&quot;l&quot;</span>, <span class="dt">alpha=</span><span class="fl">0.25</span>) +
+<span class="st">    </span><span class="kw">scale_y_continuous</span>(
+        <span class="dt">labels=</span><span class="kw">trans_format</span>(function(x) <span class="dv">2</span>^x, <span class="kw">math_format</span>(.x))) +
+<span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.25</span>,<span class="fl">0.8</span>) +
+<span class="st">    </span><span class="kw">facet_wrap</span>(~visandsign, <span class="dt">ncol=</span><span class="dv">4</span>)</code></pre>
+<div class="figure">
+<img src="figure/looking_at_data_for_censoring_below-1.svg" alt="plot of chunk looking_at_data_for_censoring_below" /><p class="caption">plot of chunk looking_at_data_for_censoring_below</p>
+</div>
+<p>We want to address outliers through censoring. We remove both cutoffs used in the original paper, and instead use censoring for values that are close to or worse than chance, or close to or past the ceiling of JND (from above) and the floor of JND (from below).</p>
+<p>As described in the paper (and with reference to the above two figures), we derive the thresholds used for censoring based on observations being above/below the ceiling/floor, and chance:</p>
+<pre class="sourceCode r"><code class="sourceCode r">df %&lt;&gt;%<span class="st"> </span><span class="kw">mutate</span>(
+    <span class="dt">censoring_threshold =</span> <span class="kw">ifelse</span>(approach ==<span class="st"> &quot;below&quot;</span>, 
+                    <span class="kw">pmin</span>(r -<span class="st"> </span>.<span class="dv">05</span>, .<span class="dv">4</span>), 
+                    <span class="kw">pmin</span>(.<span class="dv">95</span> -<span class="st"> </span>r, .<span class="dv">4</span>)),
+    <span class="dt">censored =</span> jnd &gt;<span class="st"> </span>censoring_threshold,
+    <span class="dt">censored_jnd =</span> <span class="kw">pmin</span>(jnd, censoring_threshold)
+)</code></pre>
+<p>Then, we build the censored model.</p>
+<pre class="sourceCode r"><code class="sourceCode r">m.censored =<span class="st"> </span><span class="kw">gamlss</span>(<span class="kw">Surv</span>(censored_jnd, !censored) ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach_value,
+    <span class="dt">sigma.formula =</span> ~<span class="st"> </span>visandsign,
+    <span class="dt">data=</span>df,
+    <span class="dt">family=</span><span class="kw">cens</span>(LOGNO)
+    )</code></pre>
+<p>Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison). First we fit the log-linear model without censoring or cutoffs:</p>
+<pre class="sourceCode r"><code class="sourceCode r">m.loglinear.all =<span class="st"> </span><span class="kw">gamlss</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach_value,
+    <span class="dt">sigma.formula =</span> ~<span class="st"> </span>visandsign,
+    <span class="dt">data=</span>df,
+    <span class="dt">family=</span>LOGNO
+    )</code></pre>
+<p>Then we'll generate fit lines from both models:</p>
+<pre class="sourceCode r"><code class="sourceCode r">models =<span class="st"> </span><span class="kw">list</span>(<span class="dt">uncensored=</span>m.loglinear.all, <span class="dt">censored=</span>m.censored)
+model_fits =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw">c</span>(<span class="st">&quot;uncensored&quot;</span>, <span class="st">&quot;censored&quot;</span>), function(m) {
+    <span class="kw">expand.grid</span>(<span class="dt">r=</span><span class="kw">c</span>(.<span class="dv">2</span>, .<span class="dv">9</span>), <span class="dt">visandsign=</span><span class="kw">levels</span>(df$visandsign)) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>(<span class="dt">approach_value =</span> <span class="dv">0</span>) %&gt;%
+<span class="st">    </span><span class="kw">cbind</span>(<span class="dt">prediction =</span> <span class="kw">predict</span>(models[[m]], <span class="dt">newdata=</span>.)) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>(<span class="dt">model =</span> m)
+})</code></pre>
+<p>Finally, we'll plot the fit for each condition, with and without censoring (compare to Fig 7 in paper):</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggplot</span>(
+        df,
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span><span class="kw">log2</span>(jnd)),
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_point</span>(<span class="dt">alpha=</span>.<span class="dv">25</span>, <span class="dt">size=</span><span class="dv">2</span>, <span class="dt">color=</span><span class="st">&quot;#999999&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_hline</span>(<span class="dt">yintercept=</span><span class="kw">log2</span>(.<span class="dv">45</span>), <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_line</span>(<span class="dt">data=</span>model_fits, <span class="dt">mapping=</span><span class="kw">aes</span>(<span class="dt">y=</span>prediction/<span class="kw">log</span>(<span class="dv">2</span>), <span class="dt">color=</span>model)) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">annotation_logticks</span>(<span class="dt">sides=</span><span class="st">&quot;l&quot;</span>, <span class="dt">alpha=</span><span class="fl">0.25</span>) +
+<span class="st">    </span><span class="kw">scale_y_continuous</span>(
+        <span class="dt">labels=</span><span class="kw">trans_format</span>(function(x) <span class="dv">2</span>^x, <span class="kw">math_format</span>(.x))) +
+<span class="st">    </span><span class="kw">facet_wrap</span>(~visandsign, <span class="dt">ncol=</span><span class="dv">4</span>)</code></pre>
+<div class="figure">
+<img src="figure/censored_versus_not_comparison_3-1.svg" alt="plot of chunk censored_versus_not_comparison_3" /><p class="caption">plot of chunk censored_versus_not_comparison_3</p>
+</div>
+<p>Note that when we are far from chance, the models are virtually identical. The improvment comes when we look at conditions with some or many observations worse than chance (and especially those conditions omitted from analysis in Harrison et al.).</p>
+<h1 id="bayesian-log-linear-model-with-censoring">Bayesian log-linear model with censoring</h1>
+<p>The Bayesian model can be fit by running <a href="src/fit_bayesian_model.R" class="uri">src/fit_bayesian_model.R</a> (it is not done here because it takes a bit of time). That file fits a model and saves it to <a href="output/bayesian_model.RData" class="uri">output/bayesian_model.RData</a> (specifically the <code>fit</code> variable in that saved environment).</p>
+<p>We can load that model:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">load</span>(<span class="dt">file=</span><span class="st">&quot;output/bayesian_model.RData&quot;</span>)</code></pre>
+<p>First we will decorate the model so that factors (such as <code>visandsign</code>) are recovered when we extract data from it:</p>
+<pre class="sourceCode r"><code class="sourceCode r">fit %&lt;&gt;%<span class="st"> </span><span class="kw">apply_prototypes</span>(df)</code></pre>
+<p>Then we get samples of the coefficients of the underlying linear models</p>
+<pre class="sourceCode r"><code class="sourceCode r">b_samples =<span class="st"> </span><span class="kw">extract_samples</span>(fit, b[visandsign, ..]) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>( 
+        <span class="co">#split vis and sign apart so we can apply aesthetics to them separately</span>
+        <span class="dt">vis =</span> <span class="kw">factor</span>(<span class="kw">str_sub</span>(visandsign, <span class="dt">end=</span>-<span class="dv">9</span>)),
+        <span class="dt">sign =</span> <span class="kw">factor</span>(<span class="kw">str_sub</span>(visandsign, <span class="dt">start=</span>-<span class="dv">8</span>))
+    )
+b_medians =<span class="st"> </span>b_samples %&gt;%
+<span class="st">    </span><span class="kw">group_by</span>(visandsign, vis, sign) %&gt;%<span class="st"> </span><span class="co">#vis, sign are redundant here but we want to keep them around</span>
+<span class="st">    </span><span class="kw">summarise</span>(<span class="dt">b1 =</span> <span class="kw">median</span>(b1), <span class="dt">b2 =</span> <span class="kw">median</span>(b2), <span class="dt">b3 =</span> <span class="kw">median</span>(b3), <span class="dt">b4 =</span> <span class="kw">median</span>(b4))</code></pre>
+<p>Then we generate a curve and gradient for log(mu) by r:</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">memory.limit</span>(<span class="dv">8000</span>)  <span class="co">#we need a decent amount of RAM to do this</span>
+pred_r_min =<span class="st"> </span>.<span class="dv">3</span>
+pred_r_max =<span class="st"> </span>.<span class="dv">8</span>
+pred_r_step =<span class="st"> </span>.<span class="dv">1</span>/<span class="dv">8</span>
+mu_by_r =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw">seq</span>(pred_r_min, pred_r_max, <span class="dt">by =</span> pred_r_step), 
+    function(r) <span class="kw">within</span>(b_samples, {
+        r &lt;-<span class="st"> </span>r
+        log_mu &lt;-<span class="st"> </span>b1 +<span class="st"> </span>b2*r
+    }))</code></pre>
+<p>And we plot it, in log space (Fig 8.1):</p>
+<pre class="sourceCode r"><code class="sourceCode r">mu_by_r %&gt;%
+<span class="st">    </span><span class="kw">ggplot</span>(
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span>log_mu/<span class="kw">log</span>(<span class="dv">2</span>), <span class="dt">group=</span>visandsign)
+    ) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_bin2d</span>(
+        <span class="kw">aes</span>(<span class="dt">alpha=</span>..density.., <span class="dt">fill=</span>vis, <span class="dt">color=</span><span class="ot">NULL</span>),
+        <span class="dt">breaks=</span><span class="kw">list</span>(
+            <span class="dt">x=</span><span class="kw">seq</span>(pred_r_min -<span class="st"> </span>pred_r_step/<span class="dv">2</span>, pred_r_max +<span class="st"> </span>pred_r_step/<span class="dv">2</span>, pred_r_step), 
+            <span class="dt">y=</span><span class="kw">seq</span>(<span class="kw">min</span>(mu_by_r$log_mu/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="kw">max</span>(mu_by_r$log_mu/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="dt">length=</span><span class="dv">150</span>)
+        )
+    ) +
+<span class="st">    </span><span class="kw">geom_segment</span>(<span class="dt">data=</span>b_medians, <span class="kw">aes</span>(<span class="dt">x=</span>.<span class="dv">3</span>, <span class="dt">y=</span><span class="kw">I</span>((b1 +<span class="st"> </span>.<span class="dv">3</span> *<span class="st"> </span>b2)/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="dt">xend=</span>.<span class="dv">8</span>, <span class="dt">yend=</span><span class="kw">I</span>((b1 +<span class="st"> </span>.<span class="dv">8</span> *<span class="st"> </span>b2)/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="dt">color=</span>vis, <span class="dt">linetype=</span>sign), <span class="dt">size=</span><span class="dv">1</span>) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_hline</span>(<span class="dt">yintercept=</span><span class="kw">log2</span>(.<span class="dv">45</span>), <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>) +
+<span class="st">    </span><span class="kw">geom_text</span>(<span class="dt">data=</span>b_medians, <span class="kw">aes</span>(<span class="dt">y=</span>(b1 +<span class="st"> </span>.<span class="dv">8</span> *<span class="st"> </span>b2)/<span class="kw">log</span>(<span class="dv">2</span>), <span class="dt">x=</span>.<span class="dv">82</span>, <span class="dt">color=</span>vis, <span class="dt">label=</span>visandsign), <span class="dt">hjust=</span><span class="dv">0</span>, <span class="dt">vjust=</span><span class="fl">0.25</span>) +
+<span class="st">    </span><span class="kw">scale_alpha_continuous</span>(<span class="dt">range=</span><span class="kw">c</span>(<span class="fl">0.01</span>,<span class="fl">0.6</span>), <span class="dt">guide=</span><span class="ot">FALSE</span>) +
+<span class="st">    </span><span class="kw">scale_color_discrete</span>(<span class="dt">guide=</span><span class="ot">FALSE</span>) +
+<span class="st">    </span><span class="kw">scale_fill_discrete</span>(<span class="dt">guide=</span><span class="ot">FALSE</span>) +
+<span class="st">    </span><span class="kw">scale_y_continuous</span>(<span class="dt">labels=</span><span class="kw">trans_format</span>(function(x) <span class="dv">2</span>^x, <span class="kw">math_format</span>(.x))) +
+<span class="st">    </span><span class="kw">scale_x_continuous</span>(<span class="dt">breaks=</span><span class="kw">seq</span>(<span class="fl">0.3</span>,<span class="fl">0.8</span>,<span class="dt">by=</span><span class="fl">0.1</span>), <span class="dt">limits=</span><span class="kw">c</span>(<span class="fl">0.3</span>,<span class="dv">1</span>)) +
+<span class="st">    </span><span class="kw">annotation_logticks</span>(<span class="dt">sides=</span><span class="st">&quot;l&quot;</span>)</code></pre>
+<div class="figure">
+<img src="figure/plot_mu_by_r-1.svg" alt="plot of chunk plot_mu_by_r" /><p class="caption">plot of chunk plot_mu_by_r</p>
+</div>
+<p>We can group the conditions, and examine their typical differences in log(mu) (Fig 8.3):</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">extract_samples</span>(fit, typical_mu[visandsign] |<span class="st"> </span>visandsign) %&gt;%
+<span class="st">    </span><span class="kw">mutate</span>(     <span class="co">#group by partial ranking</span>
+        <span class="dt">group1 =</span> <span class="kw">rowMeans</span>(<span class="kw">cbind</span>(scatterplotnegative, scatterplotpositive, parallelCoordinatesnegative)),
+        <span class="dt">group2 =</span> <span class="kw">rowMeans</span>(<span class="kw">cbind</span>(ordered_linepositive, donutnegative, stackedbarnegative, ordered_linenegative, stackedlinenegative, stackedareanegative)),
+        <span class="dt">group3 =</span> <span class="kw">rowMeans</span>(<span class="kw">cbind</span>(parallelCoordinatespositive, radarpositive, linepositive)),
+        <span class="dt">group4 =</span> <span class="kw">rowMeans</span>(<span class="kw">cbind</span>(donutpositive, linenegative, radarnegative, stackedareapositive, stackedbarpositive, stackedlinepositive))
+    ) %&gt;%
+<span class="st">    </span><span class="kw">with</span>(<span class="kw">rbind</span>( <span class="co">#get differences between groups</span>
+        <span class="kw">data.frame</span>(<span class="dt">comparison =</span> <span class="st">&quot;2-1&quot;</span>, <span class="dt">difference =</span> group2 -<span class="st"> </span>group1),
+        <span class="kw">data.frame</span>(<span class="dt">comparison =</span> <span class="st">&quot;3-2&quot;</span>, <span class="dt">difference =</span> group3 -<span class="st"> </span>group2),
+        <span class="kw">data.frame</span>(<span class="dt">comparison =</span> <span class="st">&quot;4-3&quot;</span>, <span class="dt">difference =</span> group4 -<span class="st"> </span>group3)
+    )) %&gt;%
+<span class="st">    </span><span class="kw">ggeye</span>(<span class="kw">aes</span>(<span class="dt">x=</span>comparison, <span class="dt">y=</span>difference/<span class="kw">log</span>(<span class="dv">2</span>))) +<span class="st"> </span>
+<span class="st">    </span><span class="kw">geom_hline</span>(<span class="dt">y=</span><span class="dv">0</span>, <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>)</code></pre>
+<div class="figure">
+<img src="figure/typical_mu_differences-1.svg" alt="plot of chunk typical_mu_differences" /><p class="caption">plot of chunk typical_mu_differences</p>
+</div>
+<p>We can also examine the between-participant variance for the high-performing group (Fig 9):</p>
+<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">extract_samples</span>(fit, u_tau[visandsign]) %&gt;%
+<span class="st">    </span><span class="kw">filter</span>(visandsign %in%<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;scatterplotpositive&quot;</span>,<span class="st">&quot;scatterplotnegative&quot;</span>,<span class="st">&quot;parallelCoordinatesnegative&quot;</span>)) %&gt;%
+<span class="st">    </span><span class="kw">ggeye</span>(<span class="kw">aes</span>(<span class="dt">x=</span>visandsign, <span class="dt">y=</span><span class="kw">sqrt</span>(<span class="dv">1</span>/u_tau)))</code></pre>
+<div class="figure">
+<img src="figure/u_tau_group1-1.svg" alt="plot of chunk u_tau_group1" /><p class="caption">plot of chunk u_tau_group1</p>
+</div>
+</body>
+</html>

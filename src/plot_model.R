@@ -21,7 +21,7 @@ plot_model_residuals = function(m, log_x=FALSE, log_base=2, data_color = "#99999
     
     scale_location = data %>%
         group_by(interval=cut(`Fitted JND`, 15)) %>%
-        summarize(
+        summarise(
             `Fitted JND` = mean(as.numeric(strsplit(as.character(interval), '(\\(|\\,|\\])')[[1]][2:3])),
             standard_deviation = sd(`Normalized Quantile Residuals`)
         )
@@ -83,7 +83,7 @@ plot_model_residuals_by_r = function(df, m, plotted_visandsign, log_y=FALSE, log
             prediction = if (log_y) prediction / log(log_base) else prediction
         ) %>%
         group_by(r) %>%
-        summarize(
+        summarise(
             sd = sd(jnd - prediction),
             jnd = mean(prediction)
         )
