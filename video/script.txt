@@ -1,0 +1,10 @@
+Harrison et al. used Weber's law to model the perception of correlation in 9 visualization types at different levels of r. They took adjusted within-condition means and fit linear models to them, discarding individual variation.
+
+In a secondary analysis of that work, we instead fit log-linear (non-Weber) models directly to the data, addressing non-constant variance and skewed residuals.
+
+We also use censoring to account for outliers.
+
+Our final Bayesian model allows us to group visualization techniques by expected performance on an unknown dataset.
+
+We also discuss data sharing, replication, and Bayesian methods.
+
