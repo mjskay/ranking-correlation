@@ -1,13 +1,13 @@
 # Supplementary materials for _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_
 
-The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison et al.'s materials](https://github.com/TuftsVALT/ranking-correlation). 
+The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison _et al._'s materials](https://github.com/TuftsVALT/ranking-correlation). 
 The analysis itself was largely written separately from the analysis in that repository.
 
 This repostory contains:
 
 * [README.md](README.md)|[.html](README.html): This file, generated from [README.Rmd](README.Rmd), which describes
   the analyses from this paper using R code and associated output (below).
-* [data/master.csv](data/master.csv): Data from [Harrison et al.](https://github.com/TuftsVALT/ranking-correlation).
+* [data/master.csv](data/master.csv): Data from [Harrison _et al._](https://github.com/TuftsVALT/ranking-correlation)
 * [src/](src/): Additional R files for the analysis (referred to in context below)
 * [output/](output/): Output from the analysis, including figures used in the paper and the Bayesian model ([output/bayesian_model.RData](output/bayesian_model.RData)).
 * [figure/](figure/): Figures output by compiling [README.Rmd](README.Rmd) and used in this file.
@@ -114,7 +114,7 @@ df$approach_value = ifelse(df$approach == "above", -1, 1)
 
 First, let's construct a comparison of the Weber mean-fitting procedure to direct fitting (Fig 1 from the paper).
 
-Let's do the mean-fitting and adjustment described by Harrison (after Rensink):
+Let's do the mean-fitting and adjustment described by Harrison _et al._ (after Rensink and Baldridge):
 
 
 ```r
@@ -122,7 +122,7 @@ weber_data_df = filter(df, visandsign == "scatterplotpositive", !mad_cutoff)
 
 weber_df = weber_data_df %>%
     group_by(approach, r) %>%
-    summarize(jnd = mean(jnd)) %>%
+    summarise(jnd = mean(jnd)) %>%
     group_by(r) %>%
     mutate(
         mean_jnd_within_r = mean(jnd),
@@ -147,7 +147,7 @@ ggplot(
     xlim(0.2, 0.9) + ylim(0, 0.3)
 ```
 
-![plot of chunk rensink_mean_adj](figure/rensink_mean_adj-1.svg) 
+![plot of chunk rensink_mean_adj](figure/rensink_mean_adj-1.png) 
 
 Then do a fit to the means:
 
@@ -163,7 +163,7 @@ ggplot(
     xlim(0.2, 0.9) + ylim(0, 0.3)
 ```
 
-![plot of chunk rensink_fit](figure/rensink_fit-1.svg) 
+![plot of chunk rensink_fit](figure/rensink_fit-1.png) 
 
 By comparison, a log-linear model looks like this:
 
@@ -181,7 +181,7 @@ ggplot(
     xlim(0.2, 0.9) + ylim(0, 0.3)
 ```
 
-![plot of chunk log_linear_example](figure/log_linear_example-1.svg) 
+![plot of chunk log_linear_example](figure/log_linear_example-1.png) 
 
 
 # Linear model
@@ -201,7 +201,7 @@ df %>%
     ylim(0,0.3)
 ```
 
-![plot of chunk approach_example](figure/approach_example-1.svg) 
+![plot of chunk approach_example](figure/approach_example-1.png) 
 
 Now fit a linear model with the original filter on MAD (> 3 MADs from the
 median) and visandsigns with > 20% JNDs worse than chance excluded (Model 1 in the paper).
@@ -221,14 +221,14 @@ And examine the fit (JND by r shown for scatterplot-negative, Fig 3A):
 plot_model_residuals_by_r(df, m.linear, "scatterplotnegative")
 ```
 
-![plot of chunk linear_model_residual_plot](figure/linear_model_residual_plot-1.svg) 
+![plot of chunk linear_model_residual_plot](figure/linear_model_residual_plot-1.png) 
 
 
 ```r
 plot_model_residuals(m.linear)
 ```
 
-![plot of chunk linear_model_residual_plot_2](figure/linear_model_residual_plot_2-1.svg) 
+![plot of chunk linear_model_residual_plot_2](figure/linear_model_residual_plot_2-1.png) 
 
 # Log-linear model
 If we estimate a Box-Cox power transform from the original model, the
@@ -274,14 +274,14 @@ And examine the fit (Fig 3B):
 plot_model_residuals_by_r(df, m.loglinear, "scatterplotnegative", log_y=TRUE)
 ```
 
-![plot of chunk log_linear_model_plot](figure/log_linear_model_plot-1.svg) 
+![plot of chunk log_linear_model_plot](figure/log_linear_model_plot-1.png) 
 
 
 ```r
 plot_model_residuals(m.loglinear, log_x=TRUE)
 ```
 
-![plot of chunk log_linear_model_plot_2](figure/log_linear_model_plot_2-1.svg) 
+![plot of chunk log_linear_model_plot_2](figure/log_linear_model_plot_2-1.png) 
 
 Note that the residuals here are more well-behaved in terms of normality and
 scale-location invariance. We also have lower AIC in the log-linear model (-1.1683425 &times; 10<sup>4</sup>)
@@ -320,7 +320,7 @@ df %>%
     facet_wrap(~visandsign, ncol=4)
 ```
 
-![plot of chunk looking_at_data_for_censoring_above](figure/looking_at_data_for_censoring_above-1.svg) 
+![plot of chunk looking_at_data_for_censoring_above](figure/looking_at_data_for_censoring_above-1.png) 
 
 And with approach _from below_ (compare to Fig 6 in paper):
 
@@ -341,7 +341,7 @@ df %>%
     facet_wrap(~visandsign, ncol=4)
 ```
 
-![plot of chunk looking_at_data_for_censoring_below](figure/looking_at_data_for_censoring_below-1.svg) 
+![plot of chunk looking_at_data_for_censoring_below](figure/looking_at_data_for_censoring_below-1.png) 
 
 We want to address outliers through censoring. We remove both cutoffs used in
 the original paper, and instead use censoring for values that are close to or
@@ -373,7 +373,7 @@ m.censored = gamlss(Surv(censored_jnd, !censored) ~ r * visandsign * approach_va
     )
 ```
 
-Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison).
+Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison _et al._).
 First we fit the log-linear model without censoring or cutoffs:
 
 
@@ -416,7 +416,7 @@ ggplot(
     facet_wrap(~visandsign, ncol=4)
 ```
 
-![plot of chunk censored_versus_not_comparison_3](figure/censored_versus_not_comparison_3-1.svg) 
+![plot of chunk censored_versus_not_comparison_3](figure/censored_versus_not_comparison_3-1.png) 
 
 Note that when we are far from chance, the models are virtually identical. The improvment
 comes when we look at conditions with some or many observations worse than chance (and
@@ -498,7 +498,7 @@ mu_by_r %>%
     annotation_logticks(sides="l")
 ```
 
-![plot of chunk plot_mu_by_r](figure/plot_mu_by_r-1.svg) 
+![plot of chunk plot_mu_by_r](figure/plot_mu_by_r-1.png) 
 
 We can group the conditions, and examine their typical differences in log(mu) (Fig 8.3):
 
@@ -520,7 +520,7 @@ extract_samples(fit, typical_mu[visandsign] | visandsign) %>%
     geom_hline(y=0, lty="dashed")
 ```
 
-![plot of chunk typical_mu_differences](figure/typical_mu_differences-1.svg) 
+![plot of chunk typical_mu_differences](figure/typical_mu_differences-1.png) 
 
 We can also examine the between-participant variance for the high-performing group (Fig 9):
 
@@ -531,4 +531,4 @@ extract_samples(fit, u_tau[visandsign]) %>%
     ggeye(aes(x=visandsign, y=sqrt(1/u_tau)))
 ```
 
-![plot of chunk u_tau_group1](figure/u_tau_group1-1.svg) 
+![plot of chunk u_tau_group1](figure/u_tau_group1-1.png) 
