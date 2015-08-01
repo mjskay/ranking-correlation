@@ -1,7 +1,12 @@
 # Supplementary materials for _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_
 
-The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison _et al._'s materials](https://github.com/TuftsVALT/ranking-correlation). 
-The analysis itself was largely written separately from the analysis in that repository.
+_Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_<br>
+_Jeffrey Heer ([jheer@uw.edu](mailto:jheer@uw.edu))_
+
+This repository contains supplemetary material for _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_ [[1](#kay2015)].
+
+The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison _et al._'s materials](https://github.com/TuftsVALT/ranking-correlation) [[2](#harrison2014)].
+The analysis here was largely written separately from the analysis in that repository.
 
 This repostory contains:
 
@@ -12,7 +17,7 @@ This repostory contains:
 * [output/](output/): Output from the analysis, including figures used in the paper and the Bayesian model ([output/bayesian_model.RData](output/bayesian_model.RData)).
 * [figure/](figure/): Figures output by compiling [README.Rmd](README.Rmd) and used in this file.
 
-The rest of this file details the analyses from this paper.
+The rest of this file details the analyses from our paper [[1](#kay2015)].
 
 ## Libraries needed for these analyses
 
@@ -532,3 +537,9 @@ extract_samples(fit, u_tau[visandsign]) %>%
 ```
 
 ![plot of chunk u_tau_group1](figure/u_tau_group1-1.png) 
+
+# References
+
+1. <a name="kay2015"></a>M. Kay & J. Heer. _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_, InfoVis 2015.
+
+2. <a name="harrison2014"></a>Harrison, L., Yang, F., Franconeri, S., & Chang, R. _Ranking Visualizations of Correlation Using Weber’s Law_, InfoVis 2014.
