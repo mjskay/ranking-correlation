@@ -29,11 +29,11 @@ code > span.er { color: #ff0000; font-weight: bold; }
 </head>
 <body>
 <h1 id="supplementary-materials-for-beyond-webers-law-a-second-look-at-ranking-visualizations-of-correlation">Supplementary materials for <em>Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation</em></h1>
-<p>The data in this repository (<a href="data/master.csv" class="uri">data/master.csv</a>) is taken from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison et al.'s materials</a>. The analysis itself was largely written separately from the analysis in that repository.</p>
+<p>The data in this repository (<a href="data/master.csv" class="uri">data/master.csv</a>) is taken from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison <em>et al.</em>'s materials</a>. The analysis itself was largely written separately from the analysis in that repository.</p>
 <p>This repostory contains:</p>
 <ul>
 <li><a href="README.md" class="uri">README.md</a>|<a href="README.html">.html</a>: This file, generated from <a href="README.Rmd" class="uri">README.Rmd</a>, which describes the analyses from this paper using R code and associated output (below).</li>
-<li><a href="data/master.csv" class="uri">data/master.csv</a>: Data from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison et al.</a>.</li>
+<li><a href="data/master.csv" class="uri">data/master.csv</a>: Data from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison <em>et al.</em></a></li>
 <li><a href="src/" class="uri">src/</a>: Additional R files for the analysis (referred to in context below)</li>
 <li><a href="output/" class="uri">output/</a>: Output from the analysis, including figures used in the paper and the Bayesian model (<a href="output/bayesian_model.RData" class="uri">output/bayesian_model.RData</a>).</li>
 <li><a href="figure/" class="uri">figure/</a>: Figures output by compiling <a href="README.Rmd" class="uri">README.Rmd</a> and used in this file.</li>
@@ -94,12 +94,12 @@ code > span.er { color: #ff0000; font-weight: bold; }
 <pre class="sourceCode r"><code class="sourceCode r">df$approach_value =<span class="st"> </span><span class="kw">ifelse</span>(df$approach ==<span class="st"> &quot;above&quot;</span>, -<span class="dv">1</span>, <span class="dv">1</span>)</code></pre>
 <h1 id="weber-style-model-versus-log-linear-model-fit-to-all-data">Weber-style model versus log-linear model fit to all data</h1>
 <p>First, let's construct a comparison of the Weber mean-fitting procedure to direct fitting (Fig 1 from the paper).</p>
-<p>Let's do the mean-fitting and adjustment described by Harrison (after Rensink):</p>
+<p>Let's do the mean-fitting and adjustment described by Harrison <em>et al.</em> (after Rensink and Baldridge):</p>
 <pre class="sourceCode r"><code class="sourceCode r">weber_data_df =<span class="st"> </span><span class="kw">filter</span>(df, visandsign ==<span class="st"> &quot;scatterplotpositive&quot;</span>, !mad_cutoff)
 
 weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <span class="st">    </span><span class="kw">group_by</span>(approach, r) %&gt;%
-<span class="st">    </span><span class="kw">summarize</span>(<span class="dt">jnd =</span> <span class="kw">mean</span>(jnd)) %&gt;%
+<span class="st">    </span><span class="kw">summarise</span>(<span class="dt">jnd =</span> <span class="kw">mean</span>(jnd)) %&gt;%
 <span class="st">    </span><span class="kw">group_by</span>(r) %&gt;%
 <span class="st">    </span><span class="kw">mutate</span>(
         <span class="dt">mean_jnd_within_r =</span> <span class="kw">mean</span>(jnd),
@@ -118,7 +118,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>), <span class="dt">guide=</span><span class="ot">FALSE</span>) +
 <span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>
 <div class="figure">
-<img src="figure/rensink_mean_adj-1.svg" alt="plot of chunk rensink_mean_adj" /><p class="caption">plot of chunk rensink_mean_adj</p>
+<img src="figure/rensink_mean_adj-1.png" alt="plot of chunk rensink_mean_adj" /><p class="caption">plot of chunk rensink_mean_adj</p>
 </div>
 <p>Then do a fit to the means:</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggplot</span>(
@@ -130,7 +130,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>), <span class="dt">guide=</span><span class="ot">FALSE</span>) +
 <span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>
 <div class="figure">
-<img src="figure/rensink_fit-1.svg" alt="plot of chunk rensink_fit" /><p class="caption">plot of chunk rensink_fit</p>
+<img src="figure/rensink_fit-1.png" alt="plot of chunk rensink_fit" /><p class="caption">plot of chunk rensink_fit</p>
 </div>
 <p>By comparison, a log-linear model looks like this:</p>
 <pre class="sourceCode r"><code class="sourceCode r">m =<span class="st"> </span><span class="kw">lm</span>(<span class="kw">log</span>(jnd) ~<span class="st"> </span>r, <span class="dt">data=</span>weber_data_df)
@@ -144,7 +144,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
     ) +
 <span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>) +<span class="st"> </span><span class="kw">ylim</span>(<span class="dv">0</span>, <span class="fl">0.3</span>)</code></pre>
 <div class="figure">
-<img src="figure/log_linear_example-1.svg" alt="plot of chunk log_linear_example" /><p class="caption">plot of chunk log_linear_example</p>
+<img src="figure/log_linear_example-1.png" alt="plot of chunk log_linear_example" /><p class="caption">plot of chunk log_linear_example</p>
 </div>
 <h1 id="linear-model">Linear model</h1>
 <p>To understand how to correct for approach, let's see an example of it on parallel coordinates-negative (Fig 2):</p>
@@ -159,7 +159,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <span class="st">    </span><span class="kw">scale_color_manual</span>(<span class="dt">values=</span><span class="kw">c</span>(<span class="st">&quot;#d62d0e&quot;</span>, <span class="st">&quot;#066fff&quot;</span>)) +
 <span class="st">    </span><span class="kw">ylim</span>(<span class="dv">0</span>,<span class="fl">0.3</span>)</code></pre>
 <div class="figure">
-<img src="figure/approach_example-1.svg" alt="plot of chunk approach_example" /><p class="caption">plot of chunk approach_example</p>
+<img src="figure/approach_example-1.png" alt="plot of chunk approach_example" /><p class="caption">plot of chunk approach_example</p>
 </div>
 <p>Now fit a linear model with the original filter on MAD (&gt; 3 MADs from the median) and visandsigns with &gt; 20% JNDs worse than chance excluded (Model 1 in the paper).</p>
 <pre class="sourceCode r"><code class="sourceCode r">m.linear =<span class="st"> </span><span class="kw">gamlss</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach,
@@ -169,11 +169,11 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <p>And examine the fit (JND by r shown for scatterplot-negative, Fig 3A):</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals_by_r</span>(df, m.linear, <span class="st">&quot;scatterplotnegative&quot;</span>)</code></pre>
 <div class="figure">
-<img src="figure/linear_model_residual_plot-1.svg" alt="plot of chunk linear_model_residual_plot" /><p class="caption">plot of chunk linear_model_residual_plot</p>
+<img src="figure/linear_model_residual_plot-1.png" alt="plot of chunk linear_model_residual_plot" /><p class="caption">plot of chunk linear_model_residual_plot</p>
 </div>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals</span>(m.linear)</code></pre>
 <div class="figure">
-<img src="figure/linear_model_residual_plot_2-1.svg" alt="plot of chunk linear_model_residual_plot_2" /><p class="caption">plot of chunk linear_model_residual_plot_2</p>
+<img src="figure/linear_model_residual_plot_2-1.png" alt="plot of chunk linear_model_residual_plot_2" /><p class="caption">plot of chunk linear_model_residual_plot_2</p>
 </div>
 <h1 id="log-linear-model">Log-linear model</h1>
 <p>If we estimate a Box-Cox power transform from the original model, the confidence interval for <span class="math"><em>λ</em></span> includes 0 (log transform) and excludes 1 (identity, i.e. the linear model):</p>
@@ -197,11 +197,11 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <p>And examine the fit (Fig 3B):</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals_by_r</span>(df, m.loglinear, <span class="st">&quot;scatterplotnegative&quot;</span>, <span class="dt">log_y=</span><span class="ot">TRUE</span>)</code></pre>
 <div class="figure">
-<img src="figure/log_linear_model_plot-1.svg" alt="plot of chunk log_linear_model_plot" /><p class="caption">plot of chunk log_linear_model_plot</p>
+<img src="figure/log_linear_model_plot-1.png" alt="plot of chunk log_linear_model_plot" /><p class="caption">plot of chunk log_linear_model_plot</p>
 </div>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot_model_residuals</span>(m.loglinear, <span class="dt">log_x=</span><span class="ot">TRUE</span>)</code></pre>
 <div class="figure">
-<img src="figure/log_linear_model_plot_2-1.svg" alt="plot of chunk log_linear_model_plot_2" /><p class="caption">plot of chunk log_linear_model_plot_2</p>
+<img src="figure/log_linear_model_plot_2-1.png" alt="plot of chunk log_linear_model_plot_2" /><p class="caption">plot of chunk log_linear_model_plot_2</p>
 </div>
 <p>Note that the residuals here are more well-behaved in terms of normality and scale-location invariance. We also have lower AIC in the log-linear model (-1.1683425 × 10<sup>4</sup>) compared to the linear model: (-1.0036835 × 10<sup>4</sup>).</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">AIC</span>(m.linear, m.loglinear)</code></pre>
@@ -242,7 +242,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.25</span>,<span class="fl">0.8</span>) +
 <span class="st">    </span><span class="kw">facet_wrap</span>(~visandsign, <span class="dt">ncol=</span><span class="dv">4</span>)</code></pre>
 <div class="figure">
-<img src="figure/looking_at_data_for_censoring_above-1.svg" alt="plot of chunk looking_at_data_for_censoring_above" /><p class="caption">plot of chunk looking_at_data_for_censoring_above</p>
+<img src="figure/looking_at_data_for_censoring_above-1.png" alt="plot of chunk looking_at_data_for_censoring_above" /><p class="caption">plot of chunk looking_at_data_for_censoring_above</p>
 </div>
 <p>And with approach <em>from below</em> (compare to Fig 6 in paper):</p>
 <pre class="sourceCode r"><code class="sourceCode r">df %&gt;%
@@ -259,7 +259,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <span class="st">    </span><span class="kw">xlim</span>(<span class="fl">0.25</span>,<span class="fl">0.8</span>) +
 <span class="st">    </span><span class="kw">facet_wrap</span>(~visandsign, <span class="dt">ncol=</span><span class="dv">4</span>)</code></pre>
 <div class="figure">
-<img src="figure/looking_at_data_for_censoring_below-1.svg" alt="plot of chunk looking_at_data_for_censoring_below" /><p class="caption">plot of chunk looking_at_data_for_censoring_below</p>
+<img src="figure/looking_at_data_for_censoring_below-1.png" alt="plot of chunk looking_at_data_for_censoring_below" /><p class="caption">plot of chunk looking_at_data_for_censoring_below</p>
 </div>
 <p>We want to address outliers through censoring. We remove both cutoffs used in the original paper, and instead use censoring for values that are close to or worse than chance, or close to or past the ceiling of JND (from above) and the floor of JND (from below).</p>
 <p>As described in the paper (and with reference to the above two figures), we derive the thresholds used for censoring based on observations being above/below the ceiling/floor, and chance:</p>
@@ -276,7 +276,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
     <span class="dt">data=</span>df,
     <span class="dt">family=</span><span class="kw">cens</span>(LOGNO)
     )</code></pre>
-<p>Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison). First we fit the log-linear model without censoring or cutoffs:</p>
+<p>Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison <em>et al.</em>). First we fit the log-linear model without censoring or cutoffs:</p>
 <pre class="sourceCode r"><code class="sourceCode r">m.loglinear.all =<span class="st"> </span><span class="kw">gamlss</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach_value,
     <span class="dt">sigma.formula =</span> ~<span class="st"> </span>visandsign,
     <span class="dt">data=</span>df,
@@ -303,7 +303,7 @@ model_fits =<span class="st"> </span><span class="kw">ldply</span>(<span class="
         <span class="dt">labels=</span><span class="kw">trans_format</span>(function(x) <span class="dv">2</span>^x, <span class="kw">math_format</span>(.x))) +
 <span class="st">    </span><span class="kw">facet_wrap</span>(~visandsign, <span class="dt">ncol=</span><span class="dv">4</span>)</code></pre>
 <div class="figure">
-<img src="figure/censored_versus_not_comparison_3-1.svg" alt="plot of chunk censored_versus_not_comparison_3" /><p class="caption">plot of chunk censored_versus_not_comparison_3</p>
+<img src="figure/censored_versus_not_comparison_3-1.png" alt="plot of chunk censored_versus_not_comparison_3" /><p class="caption">plot of chunk censored_versus_not_comparison_3</p>
 </div>
 <p>Note that when we are far from chance, the models are virtually identical. The improvment comes when we look at conditions with some or many observations worse than chance (and especially those conditions omitted from analysis in Harrison et al.).</p>
 <h1 id="bayesian-log-linear-model-with-censoring">Bayesian log-linear model with censoring</h1>
@@ -354,7 +354,7 @@ mu_by_r =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw"
 <span class="st">    </span><span class="kw">scale_x_continuous</span>(<span class="dt">breaks=</span><span class="kw">seq</span>(<span class="fl">0.3</span>,<span class="fl">0.8</span>,<span class="dt">by=</span><span class="fl">0.1</span>), <span class="dt">limits=</span><span class="kw">c</span>(<span class="fl">0.3</span>,<span class="dv">1</span>)) +
 <span class="st">    </span><span class="kw">annotation_logticks</span>(<span class="dt">sides=</span><span class="st">&quot;l&quot;</span>)</code></pre>
 <div class="figure">
-<img src="figure/plot_mu_by_r-1.svg" alt="plot of chunk plot_mu_by_r" /><p class="caption">plot of chunk plot_mu_by_r</p>
+<img src="figure/plot_mu_by_r-1.png" alt="plot of chunk plot_mu_by_r" /><p class="caption">plot of chunk plot_mu_by_r</p>
 </div>
 <p>We can group the conditions, and examine their typical differences in log(mu) (Fig 8.3):</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">extract_samples</span>(fit, typical_mu[visandsign] |<span class="st"> </span>visandsign) %&gt;%
@@ -372,14 +372,14 @@ mu_by_r =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw"
 <span class="st">    </span><span class="kw">ggeye</span>(<span class="kw">aes</span>(<span class="dt">x=</span>comparison, <span class="dt">y=</span>difference/<span class="kw">log</span>(<span class="dv">2</span>))) +<span class="st"> </span>
 <span class="st">    </span><span class="kw">geom_hline</span>(<span class="dt">y=</span><span class="dv">0</span>, <span class="dt">lty=</span><span class="st">&quot;dashed&quot;</span>)</code></pre>
 <div class="figure">
-<img src="figure/typical_mu_differences-1.svg" alt="plot of chunk typical_mu_differences" /><p class="caption">plot of chunk typical_mu_differences</p>
+<img src="figure/typical_mu_differences-1.png" alt="plot of chunk typical_mu_differences" /><p class="caption">plot of chunk typical_mu_differences</p>
 </div>
 <p>We can also examine the between-participant variance for the high-performing group (Fig 9):</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">extract_samples</span>(fit, u_tau[visandsign]) %&gt;%
 <span class="st">    </span><span class="kw">filter</span>(visandsign %in%<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;scatterplotpositive&quot;</span>,<span class="st">&quot;scatterplotnegative&quot;</span>,<span class="st">&quot;parallelCoordinatesnegative&quot;</span>)) %&gt;%
 <span class="st">    </span><span class="kw">ggeye</span>(<span class="kw">aes</span>(<span class="dt">x=</span>visandsign, <span class="dt">y=</span><span class="kw">sqrt</span>(<span class="dv">1</span>/u_tau)))</code></pre>
 <div class="figure">
-<img src="figure/u_tau_group1-1.svg" alt="plot of chunk u_tau_group1" /><p class="caption">plot of chunk u_tau_group1</p>
+<img src="figure/u_tau_group1-1.png" alt="plot of chunk u_tau_group1" /><p class="caption">plot of chunk u_tau_group1</p>
 </div>
 </body>
 </html>

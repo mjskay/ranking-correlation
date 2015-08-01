@@ -1,13 +1,13 @@
 # Supplementary materials for _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_
 
-The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison et al.'s materials](https://github.com/TuftsVALT/ranking-correlation). 
+The data in this repository ([data/master.csv](data/master.csv)) is taken from [Harrison _et al._'s materials](https://github.com/TuftsVALT/ranking-correlation). 
 The analysis itself was largely written separately from the analysis in that repository.
 
 This repostory contains:
 
 * [README.md](README.md)|[.html](README.html): This file, generated from [README.Rmd](README.Rmd), which describes
   the analyses from this paper using R code and associated output (below).
-* [data/master.csv](data/master.csv): Data from [Harrison et al.](https://github.com/TuftsVALT/ranking-correlation).
+* [data/master.csv](data/master.csv): Data from [Harrison _et al._](https://github.com/TuftsVALT/ranking-correlation)
 * [src/](src/): Additional R files for the analysis (referred to in context below)
 * [output/](output/): Output from the analysis, including figures used in the paper and the Bayesian model ([output/bayesian_model.RData](output/bayesian_model.RData)).
 * [figure/](figure/): Figures output by compiling [README.Rmd](README.Rmd) and used in this file.
@@ -19,7 +19,7 @@ The rest of this file details the analyses from this paper.
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(  #default code chunk options
     cache = TRUE,          #cache code chunks
-    dev = "svg",      #nicer PNG figures
+    dev = "CairoPNG",      #nicer PNG figures
     fig.width = 5,
     fig.height = 4.5
 )           
@@ -129,14 +129,14 @@ df$approach_value = ifelse(df$approach == "above", -1, 1)
 
 First, let's construct a comparison of the Weber mean-fitting procedure to direct fitting (Fig 1 from the paper).
 
-Let's do the mean-fitting and adjustment described by Harrison (after Rensink):
+Let's do the mean-fitting and adjustment described by Harrison _et al._ (after Rensink and Baldridge):
 
 ```{r weber_example}
 weber_data_df = filter(df, visandsign == "scatterplotpositive", !mad_cutoff)
 
 weber_df = weber_data_df %>%
     group_by(approach, r) %>%
-    summarize(jnd = mean(jnd)) %>%
+    summarise(jnd = mean(jnd)) %>%
     group_by(r) %>%
     mutate(
         mean_jnd_within_r = mean(jnd),
@@ -276,7 +276,7 @@ pander(AIC(m.linear, m.loglinear))
 # Log-linear model with censoring
 Next, let's look at some data to decide what to censor. With approach _from above_ (compare to Fig 5 in paper):
 
-```{r looking_at_data_for_censoring_above, fig.width=8, fig.height=10}
+```{r looking_at_data_for_censoring_above, fig.width=9.5, fig.height=12}
 df %>%
     filter(approach=="above") %>%
     ggplot(
@@ -294,7 +294,7 @@ df %>%
 
 And with approach _from below_ (compare to Fig 6 in paper):
 
-```{r looking_at_data_for_censoring_below, fig.width=8, fig.height=10}
+```{r looking_at_data_for_censoring_below, fig.width=9.5, fig.height=12}
 df %>%
     filter(approach=="below") %>%
     ggplot(
@@ -338,7 +338,7 @@ m.censored = gamlss(Surv(censored_jnd, !censored) ~ r * visandsign * approach_va
     )
 ```
 
-Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison).
+Now let's compare to a non-censored model also fit to all data (without cutoffs from Harrison _et al._).
 First we fit the log-linear model without censoring or cutoffs:
 
 ```{r censored_versus_not_comparison, results="hide"}
@@ -364,7 +364,7 @@ model_fits = ldply(c("uncensored", "censored"), function(m) {
 Finally, we'll plot the fit for each condition, with and without censoring
 (compare to Fig 7 in paper):
 
-```{r censored_versus_not_comparison_3, fig.width=9, fig.height=10}
+```{r censored_versus_not_comparison_3, fig.width=10.5, fig.height=12}
 ggplot(
         df,
         aes(x=r, y=log2(jnd)),
@@ -430,7 +430,7 @@ mu_by_r = ldply(seq(pred_r_min, pred_r_max, by = pred_r_step),
 
 And we plot it, in log space (Fig 8.1):
 
-```{r plot_mu_by_r, fig.width=8.5, fig.height=6.5}
+```{r plot_mu_by_r, fig.width=10, fig.height=7.5, dev="png"}
 mu_by_r %>%
     ggplot(
         aes(x=r, y=log_mu/log(2), group=visandsign)
