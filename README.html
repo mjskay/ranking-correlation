@@ -29,7 +29,19 @@ code > span.er { color: #ff0000; font-weight: bold; }
 </head>
 <body>
 <h1 id="supplementary-materials-for-beyond-webers-law-a-second-look-at-ranking-visualizations-of-correlation">Supplementary materials for <em>Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation</em></h1>
-<p>The data in this repository (<a href="data/master.csv" class="uri">data/master.csv</a>) is taken from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison <em>et al.</em>'s materials</a>. The analysis itself was largely written separately from the analysis in that repository.</p>
+<p><em>Matthew Kay (<script type="text/javascript">
+<!--
+h='&#x75;&#x77;&#46;&#x65;&#100;&#x75;';a='&#64;';n='&#x6d;&#106;&#x73;&#x6b;&#x61;&#x79;';e=n+a+h;
+document.write('<a h'+'ref'+'="ma'+'ilto'+':'+e+'" clas'+'s="em' + 'ail">'+e+'<\/'+'a'+'>');
+// -->
+</script><noscript>&#x6d;&#106;&#x73;&#x6b;&#x61;&#x79;&#32;&#x61;&#116;&#32;&#x75;&#x77;&#32;&#100;&#x6f;&#116;&#32;&#x65;&#100;&#x75;</noscript>)</em><br> <em>Jeffrey Heer (<script type="text/javascript">
+<!--
+h='&#x75;&#x77;&#46;&#x65;&#100;&#x75;';a='&#64;';n='&#106;&#104;&#x65;&#x65;&#114;';e=n+a+h;
+document.write('<a h'+'ref'+'="ma'+'ilto'+':'+e+'" clas'+'s="em' + 'ail">'+e+'<\/'+'a'+'>');
+// -->
+</script><noscript>&#106;&#104;&#x65;&#x65;&#114;&#32;&#x61;&#116;&#32;&#x75;&#x77;&#32;&#100;&#x6f;&#116;&#32;&#x65;&#100;&#x75;</noscript>)</em></p>
+<p>This repository contains supplemetary material for <em>Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation</em> [<a href="#kay2015">1</a>].</p>
+<p>The data in this repository (<a href="data/master.csv" class="uri">data/master.csv</a>) is taken from <a href="https://github.com/TuftsVALT/ranking-correlation">Harrison <em>et al.</em>'s materials</a> [<a href="#harrison2014">2</a>]. The analysis here was largely written separately from the analysis in that repository.</p>
 <p>This repostory contains:</p>
 <ul>
 <li><a href="README.md" class="uri">README.md</a>|<a href="README.html">.html</a>: This file, generated from <a href="README.Rmd" class="uri">README.Rmd</a>, which describes the analyses from this paper using R code and associated output (below).</li>
@@ -38,7 +50,7 @@ code > span.er { color: #ff0000; font-weight: bold; }
 <li><a href="output/" class="uri">output/</a>: Output from the analysis, including figures used in the paper and the Bayesian model (<a href="output/bayesian_model.RData" class="uri">output/bayesian_model.RData</a>).</li>
 <li><a href="figure/" class="uri">figure/</a>: Figures output by compiling <a href="README.Rmd" class="uri">README.Rmd</a> and used in this file.</li>
 </ul>
-<p>The rest of this file details the analyses from this paper.</p>
+<p>The rest of this file details the analyses from our paper [<a href="#kay2015">1</a>].</p>
 <h2 id="libraries-needed-for-these-analyses">Libraries needed for these analyses</h2>
 <p>The following necessary libraries are available on CRAN, and can be installed using <code>install.packages</code>:</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(Cairo)          <span class="co"># nicer PNG rendering</span>
@@ -381,5 +393,10 @@ mu_by_r =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw"
 <div class="figure">
 <img src="figure/u_tau_group1-1.png" alt="plot of chunk u_tau_group1" /><p class="caption">plot of chunk u_tau_group1</p>
 </div>
+<h1 id="references">References</h1>
+<ol style="list-style-type: decimal">
+<li><p><a name="kay2015"></a>M. Kay &amp; J. Heer. <em>Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation</em>, InfoVis 2015.</p></li>
+<li><p><a name="harrison2014"></a>Harrison, L., Yang, F., Franconeri, S., &amp; Chang, R. <em>Ranking Visualizations of Correlation Using Weber’s Law</em>, InfoVis 2014.</p></li>
+</ol>
 </body>
 </html>
