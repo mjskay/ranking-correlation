@@ -234,7 +234,7 @@ plot_model_residuals(m.linear)
 
 # Log-linear model
 If we estimate a Box-Cox power transform from the original model, the
-confidence interval for $\lambda$ includes 0 (log transform) and excludes 1
+confidence interval for λ includes 0 (log transform) and excludes 1
 (identity, i.e. the linear model):
 
 ```{r boxcox}
