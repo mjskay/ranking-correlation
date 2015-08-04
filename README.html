@@ -189,7 +189,7 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <img src="figure/linear_model_residual_plot_2-1.png" alt="plot of chunk linear_model_residual_plot_2" /><p class="caption">plot of chunk linear_model_residual_plot_2</p>
 </div>
 <h1 id="log-linear-model">Log-linear model</h1>
-<p>If we estimate a Box-Cox power transform from the original model, the confidence interval for <span class="math"><em>λ</em></span> includes 0 (log transform) and excludes 1 (identity, i.e. the linear model):</p>
+<p>If we estimate a Box-Cox power transform from the original model, the confidence interval for λ includes 0 (log transform) and excludes 1 (identity, i.e. the linear model):</p>
 <pre class="sourceCode r"><code class="sourceCode r">bc =<span class="st"> </span><span class="kw">powerTransform</span>(jnd ~<span class="st"> </span>r *<span class="st"> </span>visandsign *<span class="st"> </span>approach, <span class="dt">data=</span><span class="kw">filter</span>(df, !mad_cutoff &amp;<span class="st"> </span>!p_chance_cutoff))
 <span class="kw">summary</span>(bc)</code></pre>
 <pre><code>## bcPower Transformation to Normality 
