@@ -30,6 +30,7 @@ The following necessary libraries are available on CRAN, and can be installed us
 library(Cairo)          # nicer PNG rendering
 library(car)            # powerTransform
 library(ggplot2)        # ggplot, stat_..., geom_..., etc
+library(directlabels)   # geom_dl
 library(scales)         # trans_format
 library(grid)
 library(gtable)
@@ -494,7 +495,7 @@ mu_by_r %>%
     ) +
     geom_segment(data=b_medians, aes(x=.3, y=I((b1 + .3 * b2)/log(2)), xend=.8, yend=I((b1 + .8 * b2)/log(2)), color=vis, linetype=sign), size=1) + 
     geom_hline(yintercept=log2(.45), lty="dashed") +
-    geom_text(data=b_medians, aes(y=(b1 + .8 * b2)/log(2), x=.82, color=vis, label=visandsign), hjust=0, vjust=0.25) +
+    geom_dl(data=b_medians, aes(y=(b1 + .8 * b2)/log(2), x=.82, color=vis, label=visandsign), method="last.bumpup") +
     scale_alpha_continuous(range=c(0.01,0.6), guide=FALSE) +
     scale_color_discrete(guide=FALSE) +
     scale_fill_discrete(guide=FALSE) +
