@@ -299,9 +299,9 @@ weber_df =<span class="st"> </span>weber_data_df %&gt;%
 <pre class="sourceCode r"><code class="sourceCode r">models =<span class="st"> </span><span class="kw">list</span>(<span class="dt">uncensored=</span>m.loglinear.all, <span class="dt">censored=</span>m.censored)
 model_fits =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw">c</span>(<span class="st">&quot;uncensored&quot;</span>, <span class="st">&quot;censored&quot;</span>), function(m) {
     <span class="kw">expand.grid</span>(<span class="dt">r=</span><span class="kw">c</span>(.<span class="dv">2</span>, .<span class="dv">9</span>), <span class="dt">visandsign=</span><span class="kw">levels</span>(df$visandsign)) %&gt;%
-<span class="st">    </span><span class="kw">mutate</span>(<span class="dt">approach_value =</span> <span class="dv">0</span>) %&gt;%
-<span class="st">    </span><span class="kw">cbind</span>(<span class="dt">prediction =</span> <span class="kw">predict</span>(models[[m]], <span class="dt">newdata=</span>.)) %&gt;%
-<span class="st">    </span><span class="kw">mutate</span>(<span class="dt">model =</span> m)
+<span class="st">        </span><span class="kw">mutate</span>(<span class="dt">approach_value =</span> <span class="dv">0</span>) %&gt;%
+<span class="st">        </span><span class="kw">cbind</span>(<span class="dt">prediction =</span> <span class="kw">predict</span>(models[[m]], <span class="dt">newdata=</span>., <span class="dt">data=</span>df)) %&gt;%
+<span class="st">        </span><span class="kw">mutate</span>(<span class="dt">model =</span> m)
 })</code></pre>
 <p>Finally, we'll plot the fit for each condition, with and without censoring (compare to Fig 7 in paper):</p>
 <pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggplot</span>(
@@ -336,25 +336,24 @@ b_medians =<span class="st"> </span>b_samples %&gt;%
 <span class="st">    </span><span class="kw">group_by</span>(visandsign, vis, sign) %&gt;%<span class="st"> </span><span class="co">#vis, sign are redundant here but we want to keep them around</span>
 <span class="st">    </span><span class="kw">summarise</span>(<span class="dt">b1 =</span> <span class="kw">median</span>(b1), <span class="dt">b2 =</span> <span class="kw">median</span>(b2), <span class="dt">b3 =</span> <span class="kw">median</span>(b3), <span class="dt">b4 =</span> <span class="kw">median</span>(b4))</code></pre>
 <p>Then we generate a curve and gradient for log(mu) by r:</p>
-<pre class="sourceCode r"><code class="sourceCode r"><span class="kw">memory.limit</span>(<span class="dv">8000</span>)  <span class="co">#we need a decent amount of RAM to do this</span>
-pred_r_min =<span class="st"> </span>.<span class="dv">3</span>
+<pre class="sourceCode r"><code class="sourceCode r">pred_r_min =<span class="st"> </span>.<span class="dv">3</span>
 pred_r_max =<span class="st"> </span>.<span class="dv">8</span>
-pred_r_step =<span class="st"> </span>.<span class="dv">1</span>/<span class="dv">8</span>
-mu_by_r =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw">seq</span>(pred_r_min, pred_r_max, <span class="dt">by =</span> pred_r_step), 
-    function(r) <span class="kw">within</span>(b_samples, {
-        r &lt;-<span class="st"> </span>r
-        log_mu &lt;-<span class="st"> </span>b1 +<span class="st"> </span>b2*r
-    }))</code></pre>
+pred_r_step =<span class="st"> </span>.<span class="dv">1</span>/<span class="dv">16</span>
+mu_by_r =<span class="st"> </span>b_samples %&gt;%
+<span class="st">    </span><span class="kw">group_by</span>(visandsign, vis, sign) %&gt;%
+<span class="st">    </span><span class="kw">predict_curve_density</span>(
+        log_mu ~<span class="st"> </span>b1 +<span class="st"> </span>b2 *<span class="st"> </span>r,
+        <span class="dt">r =</span> <span class="kw">seq</span>(pred_r_min, pred_r_max, <span class="dt">by =</span> pred_r_step),
+    )</code></pre>
 <p>And we plot it, in log space (Fig 8.1):</p>
 <pre class="sourceCode r"><code class="sourceCode r">mu_by_r %&gt;%
 <span class="st">    </span><span class="kw">ggplot</span>(
-        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">y=</span>log_mu/<span class="kw">log</span>(<span class="dv">2</span>), <span class="dt">group=</span>visandsign)
+        <span class="kw">aes</span>(<span class="dt">x=</span>r, <span class="dt">group=</span>visandsign)
     ) +<span class="st"> </span>
-<span class="st">    </span><span class="kw">geom_bin2d</span>(
-        <span class="kw">aes</span>(<span class="dt">alpha=</span>..density.., <span class="dt">fill=</span>vis, <span class="dt">color=</span><span class="ot">NULL</span>),
-        <span class="dt">breaks=</span><span class="kw">list</span>(
-            <span class="dt">x=</span><span class="kw">seq</span>(pred_r_min -<span class="st"> </span>pred_r_step/<span class="dv">2</span>, pred_r_max +<span class="st"> </span>pred_r_step/<span class="dv">2</span>, pred_r_step), 
-            <span class="dt">y=</span><span class="kw">seq</span>(<span class="kw">min</span>(mu_by_r$log_mu/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="kw">max</span>(mu_by_r$log_mu/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="dt">length=</span><span class="dv">150</span>)
+<span class="st">    </span><span class="kw">geom_rect</span>(
+        <span class="kw">aes</span>(<span class="dt">xmin =</span> r -<span class="st"> </span>pred_r_step/<span class="dv">2</span>, <span class="dt">xmax =</span> r +<span class="st"> </span>pred_r_step/<span class="dv">2</span>, 
+            <span class="dt">ymin =</span> log_mu.lower/<span class="kw">log</span>(<span class="dv">2</span>), <span class="dt">ymax =</span> log_mu.upper/<span class="kw">log</span>(<span class="dv">2</span>),
+            <span class="dt">alpha =</span> log_mu.density, <span class="dt">fill =</span> vis, <span class="dt">color =</span> <span class="ot">NULL</span>
         )
     ) +
 <span class="st">    </span><span class="kw">geom_segment</span>(<span class="dt">data=</span>b_medians, <span class="kw">aes</span>(<span class="dt">x=</span>.<span class="dv">3</span>, <span class="dt">y=</span><span class="kw">I</span>((b1 +<span class="st"> </span>.<span class="dv">3</span> *<span class="st"> </span>b2)/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="dt">xend=</span>.<span class="dv">8</span>, <span class="dt">yend=</span><span class="kw">I</span>((b1 +<span class="st"> </span>.<span class="dv">8</span> *<span class="st"> </span>b2)/<span class="kw">log</span>(<span class="dv">2</span>)), <span class="dt">color=</span>vis, <span class="dt">linetype=</span>sign), <span class="dt">size=</span><span class="dv">1</span>) +<span class="st"> </span>
@@ -364,8 +363,9 @@ mu_by_r =<span class="st"> </span><span class="kw">ldply</span>(<span class="kw"
 <span class="st">    </span><span class="kw">scale_color_discrete</span>(<span class="dt">guide=</span><span class="ot">FALSE</span>) +
 <span class="st">    </span><span class="kw">scale_fill_discrete</span>(<span class="dt">guide=</span><span class="ot">FALSE</span>) +
 <span class="st">    </span><span class="kw">scale_y_continuous</span>(<span class="dt">labels=</span><span class="kw">trans_format</span>(function(x) <span class="dv">2</span>^x, <span class="kw">math_format</span>(.x))) +
-<span class="st">    </span><span class="kw">scale_x_continuous</span>(<span class="dt">breaks=</span><span class="kw">seq</span>(<span class="fl">0.3</span>,<span class="fl">0.8</span>,<span class="dt">by=</span><span class="fl">0.1</span>), <span class="dt">limits=</span><span class="kw">c</span>(<span class="fl">0.3</span>,<span class="dv">1</span>)) +
+<span class="st">    </span><span class="kw">scale_x_continuous</span>(<span class="dt">breaks=</span><span class="kw">seq</span>(<span class="fl">0.3</span>,<span class="fl">0.8</span>,<span class="dt">by=</span><span class="fl">0.1</span>), <span class="dt">limits=</span><span class="kw">c</span>(<span class="fl">0.29</span>,<span class="dv">1</span>)) +
 <span class="st">    </span><span class="kw">annotation_logticks</span>(<span class="dt">sides=</span><span class="st">&quot;l&quot;</span>)</code></pre>
+<pre><code>## Loading required package: proto</code></pre>
 <div class="figure">
 <img src="figure/plot_mu_by_r-1.png" alt="plot of chunk plot_mu_by_r" /><p class="caption">plot of chunk plot_mu_by_r</p>
 </div>

@@ -77,7 +77,7 @@ plot_model_residuals_by_r = function(df, m, plotted_visandsign, log_y=FALSE, log
     #calculate residual variance
     residual_df = df %>%
         filter(visandsign == plotted_visandsign & !mad_cutoff) %>%
-        cbind(prediction=predict(m, newdata=.)) %>%
+        cbind(prediction=predict(m, newdata=., data=filter(df, !mad_cutoff & !p_chance_cutoff))) %>%
         mutate(
             jnd = if (log_y) log(jnd, base=log_base) else jnd,
             prediction = if (log_y) prediction / log(log_base) else prediction

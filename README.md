@@ -398,9 +398,9 @@ Then we'll generate fit lines from both models:
 models = list(uncensored=m.loglinear.all, censored=m.censored)
 model_fits = ldply(c("uncensored", "censored"), function(m) {
     expand.grid(r=c(.2, .9), visandsign=levels(df$visandsign)) %>%
-    mutate(approach_value = 0) %>%
-    cbind(prediction = predict(models[[m]], newdata=.)) %>%
-    mutate(model = m)
+        mutate(approach_value = 0) %>%
+        cbind(prediction = predict(models[[m]], newdata=., data=df)) %>%
+        mutate(model = m)
 })
 ```
 
@@ -467,15 +467,15 @@ Then we generate a curve and gradient for log(mu) by r:
 
 
 ```r
-memory.limit(8000)  #we need a decent amount of RAM to do this
 pred_r_min = .3
 pred_r_max = .8
-pred_r_step = .1/8
-mu_by_r = ldply(seq(pred_r_min, pred_r_max, by = pred_r_step), 
-    function(r) within(b_samples, {
-        r <- r
-        log_mu <- b1 + b2*r
-    }))
+pred_r_step = .1/16
+mu_by_r = b_samples %>%
+    group_by(visandsign, vis, sign) %>%
+    predict_curve_density(
+        log_mu ~ b1 + b2 * r,
+        r = seq(pred_r_min, pred_r_max, by = pred_r_step),
+    )
 ```
 
 And we plot it, in log space (Fig 8.1):
@@ -484,13 +484,12 @@ And we plot it, in log space (Fig 8.1):
 ```r
 mu_by_r %>%
     ggplot(
-        aes(x=r, y=log_mu/log(2), group=visandsign)
+        aes(x=r, group=visandsign)
     ) + 
-    geom_bin2d(
-        aes(alpha=..density.., fill=vis, color=NULL),
-        breaks=list(
-            x=seq(pred_r_min - pred_r_step/2, pred_r_max + pred_r_step/2, pred_r_step), 
-            y=seq(min(mu_by_r$log_mu/log(2)), max(mu_by_r$log_mu/log(2)), length=150)
+    geom_rect(
+        aes(xmin = r - pred_r_step/2, xmax = r + pred_r_step/2, 
+            ymin = log_mu.lower/log(2), ymax = log_mu.upper/log(2),
+            alpha = log_mu.density, fill = vis, color = NULL
         )
     ) +
     geom_segment(data=b_medians, aes(x=.3, y=I((b1 + .3 * b2)/log(2)), xend=.8, yend=I((b1 + .8 * b2)/log(2)), color=vis, linetype=sign), size=1) + 
@@ -500,8 +499,12 @@ mu_by_r %>%
     scale_color_discrete(guide=FALSE) +
     scale_fill_discrete(guide=FALSE) +
     scale_y_continuous(labels=trans_format(function(x) 2^x, math_format(.x))) +
-    scale_x_continuous(breaks=seq(0.3,0.8,by=0.1), limits=c(0.3,1)) +
+    scale_x_continuous(breaks=seq(0.3,0.8,by=0.1), limits=c(0.29,1)) +
     annotation_logticks(sides="l")
+```
+
+```
+## Loading required package: proto
 ```
 
 ![plot of chunk plot_mu_by_r](figure/plot_mu_by_r-1.png) 
