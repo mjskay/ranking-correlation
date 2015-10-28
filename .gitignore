@@ -6,4 +6,5 @@
 *~
 ~$*.docx
 ~$*.dotx
+~*.idlk
 cache/
