@@ -9,3 +9,4 @@
 ~$*.dotx
 ~*.idlk
 cache/
+*_cache/

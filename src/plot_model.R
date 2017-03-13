@@ -37,7 +37,7 @@ plot_model_residuals = function(m, log_x=FALSE, log_base=2, data_color = "#99999
         ) +
         geom_point(color=data_color, size=2, alpha=0.25) +
         geom_rug(sides="r", color=data_color) +
-        geom_hline(y=0, linetype="dashed", alpha=0.5) + 
+        geom_hline(yintercept=0, linetype="dashed", alpha=0.5) + 
         geom_linerange(data=scale_location, aes(ymin=standard_deviation, ymax=-standard_deviation, y=NULL), color=sd_color, size=1.0) +
         ylim(-5.5,5.5)
     if (log_x) {
@@ -45,7 +45,7 @@ plot_model_residuals = function(m, log_x=FALSE, log_base=2, data_color = "#99999
             scale_x_continuous(
                 limits=c(min(data$`Fitted JND`), max(data$`Fitted JND`)),
                 labels=trans_format(function(x) log_base^x, math_format(.x))) +
-            geom_vline(y=log2(.45)) +
+            geom_vline(xintercept=log2(.45)) +
             annotation_logticks(sides="b")
     } else {
         fitted_plot = fitted_plot +
@@ -56,7 +56,7 @@ plot_model_residuals = function(m, log_x=FALSE, log_base=2, data_color = "#99999
     
     residual_hist = ggplot(data, aes(x=`Normalized Quantile Residuals`)) +
         stat_density(fill=data_color) +
-        geom_vline(x=0, linetype="dashed", alpha=0.5) + 
+        geom_vline(xintercept=0, linetype="dashed", alpha=0.5) + 
         xlim(-5.5,5.5) +
         ylim(0,0.6) +
         stat_function(fun=dnorm, linetype="dashed", color=dnorm_color) +

@@ -1,4 +1,7 @@
-# Supplementary materials for _Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation_
+---
+title: "Supplementary materials for Beyond Weber's Law: A Second Look at Ranking Visualizations of Correlation"
+output: github_document
+---
 
 _Matthew Kay ([mjskay@uw.edu](mailto:mjskay@uw.edu))_<br>
 _Jeffrey Heer ([jheer@uw.edu](mailto:jheer@uw.edu))_
@@ -26,7 +29,8 @@ knitr::opts_chunk$set(  #default code chunk options
     cache = TRUE,          #cache code chunks
     dev = "CairoPNG",      #nicer PNG figures
     fig.width = 5,
-    fig.height = 4.5
+    fig.height = 4.5,
+    dpi = 72
 )           
 pander::panderOptions("table.split.table", Inf)     #don't split wide tables in output
 pander::panderOptions("table.style", "rmarkdown")   #table style that's supported by github
@@ -474,7 +478,7 @@ extract_samples(fit, typical_mu[visandsign] | visandsign) %>%
         data.frame(comparison = "4-3", difference = group4 - group3)
     )) %>%
     ggeye(aes(x=comparison, y=difference/log(2))) + 
-    geom_hline(y=0, lty="dashed")
+    geom_hline(yintercept=0, lty="dashed")
 ```
 
 We can also examine the between-participant variance for the high-performing group (Fig 9):
